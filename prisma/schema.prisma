@@ -1,0 +1,47 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Video {
+  id               String   @id @default(uuid())
+  title            String
+  originalFileName String
+  status           String   @default("pending")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model TelegramUser {
+  id           String   @id @default(uuid())
+  telegramId   String   @unique
+  botId        String?
+  firstName    String
+  lastName     String?
+  username     String?
+  phoneNumber  String?
+  profileImage String?
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  messages     TelegramMessage[]
+}
+
+model TelegramMessage {
+  id             String       @id @default(uuid())
+  telegramUserId String
+  telegramUser   TelegramUser @relation(fields: [telegramUserId], references: [id])
+  messageType    String       @default("text") // text, photo, voice, document, video
+  text           String?      @db.Text         // JSON metadata for media or raw text
+  status         String       @default("unread")
+  messageId      String
+  filePath       String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}

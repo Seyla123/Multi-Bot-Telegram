@@ -1,0 +1,67 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nest_api
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    # Overriding the Dockerfile CMD to use hot-reloading for local development
+    command: npm run start:dev
+    env_file:
+      - .env
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - nest_network
+
+  mysql:
+    image: mysql:8.0
+    container_name: nest_mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: nest_db
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: nest_user
+      MYSQL_PASSWORD: secretpassword
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nest_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: nest_redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nest_network
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  nest_network:
+    driver: bridge

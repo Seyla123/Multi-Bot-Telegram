@@ -1,9 +1,49 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { BullModule } from '@nestjs/bullmq';
+import { EmailsModule } from './emails/emails.module';
+import { PrismaModule } from './prisma/prisma.module';
+import { VideosModule } from './videos/videos.module';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TelegrafModule } from 'nestjs-telegraf';
+import { TelegramModule } from './telegram/telegram.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
+import { PusherModule } from './pusher/pusher.module';
 
 @Module({
-  imports: [],
+  imports: [
+    ServeStaticModule.forRoot(
+      {
+        rootPath: join(__dirname, '..', 'client/dist'),
+        exclude: ['/api/{*any}', '/telegram/{*any}', '/storage/{*any}'],
+      },
+      {
+        rootPath: join(__dirname, '..', 'storage'),
+        serveRoot: '/storage',
+        exclude: ['/api/{*any}', '/telegram/{*any}'],
+      }
+    ),
+    ConfigModule.forRoot({ isGlobal: true }),
+    TelegrafModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        token: configService.get<string>('TELEGRAM_BOT_TOKEN') || '',
+      }),
+    }),
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+      },
+    }),
+    EmailsModule,
+    PrismaModule,
+    VideosModule,
+    TelegramModule,
+    PusherModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

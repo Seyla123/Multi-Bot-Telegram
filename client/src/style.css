@@ -1,0 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-bg-dark: #212121;
+  --color-bg-sidebar: #212121;
+  --color-bg-chat: #0f0f0f;
+  
+  --color-msg-in: #212121;
+  --color-msg-out: #8774e1; /* Telegram dynamic purple/blue for true dark mode */
+  --color-msg-out-text: #ffffff;
+  
+  --color-border: #000000;
+  --color-accent: #8774e1;
+  --color-accent-hover: #7b69cd;
+
+  --color-text-main: #ffffff;
+  --color-text-muted: #aaaaaa;
+}
+
+body {
+  @apply bg-bg-dark text-text-main antialiased h-screen overflow-hidden;
+  font-family: 'Roboto', sans-serif;
+}
+
+/* Custom Scrollbar for chat area (Telegram style) */
+::-webkit-scrollbar {
+  width: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Telegram chat background pattern */
+.chat-bg-pattern {
+  background-color: var(--color-bg-chat);
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M54.627 0l.83.83-1.66 1.66-.83-.83.83-.83zM27.5 38c-5.799 0-10.5-4.701-10.5-10.5S21.701 17 27.5 17 38 21.701 38 27.5 33.299 38 27.5 38zm0-19c-4.694 0-8.5 3.806-8.5 8.5s3.806 8.5 8.5 8.5 8.5-3.806 8.5-8.5-3.806-8.5-8.5-8.5zm19.82 17.652l-1.07-1.07 1.414-1.414 1.07 1.07-1.414 1.414zM40 50h-2v-2h2v2zm-20-40h-2V8h2v2zM6 14h2v2H6v-2zm48 32h2v2h-2v-2z' fill='%23ffffff' fill-opacity='0.03' fill-rule='evenodd'/%3E%3C/svg%3E");
+}
