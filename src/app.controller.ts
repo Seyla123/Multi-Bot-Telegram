@@ -18,4 +18,9 @@ export class AppController {
   async testEmail() {
     return this.emailsService.sendWelcomeEmail('test@example.com');
   }
+
+  @Get('test-error')
+  testError() {
+    throw new Error('This is a simulated test error to trigger the Winston logger!');
+  }
 }

@@ -14,6 +14,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'select', user: User): void
+  (e: 'view-logs'): void
 }>()
 
 const {
@@ -100,6 +101,20 @@ onUnmounted(() => {
       @loadMore="() => fetchUsers(true)"
     />
 
+    <!-- View Logs Button -->
+    <div class="p-4 border-t border-slate-700/50">
+      <button 
+        @click="emit('view-logs')"
+        class="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-all duration-200 border border-slate-700/50 font-medium text-sm flex items-center justify-center gap-2 shadow-lg"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        System Logs
+      </button>
+    </div>
+
+    <!-- Modals -->
     <AddBotModal 
       v-if="showAddBot" 
       @close="showAddBot = false" 

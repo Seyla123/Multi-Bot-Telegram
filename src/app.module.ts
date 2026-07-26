@@ -11,13 +11,14 @@ import { TelegramModule } from './telegram/telegram.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { PusherModule } from './pusher/pusher.module';
+import { LogsModule } from './logs/logs.module';
 
 @Module({
   imports: [
     ServeStaticModule.forRoot(
       {
         rootPath: join(process.cwd(), 'client/dist'),
-        exclude: ['/api/{*any}', '/telegram/{*any}', '/storage/{*any}'],
+        exclude: ['/api/{*any}', '/telegram/{*any}', '/storage/{*any}', '/logs/{*any}', '/logs'],
       },
       {
         rootPath: join(process.cwd(), 'storage'),
@@ -37,6 +38,7 @@ import { PusherModule } from './pusher/pusher.module';
     VideosModule,
     TelegramModule,
     PusherModule,
+    LogsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
