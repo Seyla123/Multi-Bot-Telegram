@@ -7,10 +7,13 @@ export async function apiFetch<T>(url: string, options?: RequestInit): Promise<T
   }
   
   const json = await response.json();
-  // NestJS global interceptor unwrapping: { status: boolean, data: T }
+  // NestJS global interceptor unwrapping: { status: boolean, data: T, meta?: any }
   if (json.status !== undefined && 'data' in json) {
     if (!json.status) {
       throw new Error(json.message || 'API request failed');
+    }
+    if ('meta' in json) {
+      return { data: json.data, meta: json.meta } as unknown as T;
     }
     return json.data as T;
   }

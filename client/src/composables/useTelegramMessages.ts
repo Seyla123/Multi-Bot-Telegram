@@ -8,6 +8,10 @@ export function useTelegramMessages(activeUser: () => User | null) {
   const loading = ref(false);
   const error = ref<string | null>(null);
   const isSending = ref(false);
+  
+  const page = ref(1);
+  const limit = ref(50);
+  const hasMore = ref(true);
 
   let onMessagesUpdatedCb: (() => void) | null = null;
 
@@ -60,18 +64,35 @@ export function useTelegramMessages(activeUser: () => User | null) {
     channel.unbind('message_pinned', handleMessagePinned);
   };
 
-  const fetchMessages = async (showLoading = false) => {
+  const fetchMessages = async (loadMore = false) => {
     const user = activeUser();
     if (!user) return;
 
-    if (showLoading) loading.value = true;
+    if (loading.value && loadMore) return; // prevent duplicate fetching
+    if (loadMore && !hasMore.value) return;
+
+    if (!loadMore) {
+      page.value = 1;
+      loading.value = true;
+    } else {
+      page.value += 1;
+    }
+
+    error.value = null;
     try {
-      messages.value = await TelegramService.getMessages(user.id);
+      const response = await TelegramService.getMessages(user.id, page.value, limit.value);
+      if (loadMore) {
+        messages.value = [...response.data, ...messages.value];
+      } else {
+        messages.value = response.data;
+      }
+      hasMore.value = page.value < response.meta.totalPages;
       if (onMessagesUpdatedCb) onMessagesUpdatedCb();
     } catch (err: any) {
       error.value = err.message || 'Failed to fetch messages';
+      if (loadMore) page.value -= 1; // rollback
     } finally {
-      if (showLoading) loading.value = false;
+      loading.value = false;
     }
   };
 
@@ -131,6 +152,7 @@ export function useTelegramMessages(activeUser: () => User | null) {
     error,
     isSending,
     fetchMessages,
+    hasMore,
     sendMessage,
     deleteMessage,
     togglePin,

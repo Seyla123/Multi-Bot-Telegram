@@ -9,12 +9,17 @@ export interface User {
   firstName: string
   lastName: string | null
   username: string | null
+  unreadCount?: number
+  lastMessage?: any | null
 }
 
 const activeUser = ref<User | null>(null)
 
 const handleUserSelected = (user: User) => {
   activeUser.value = user
+  const url = new URL(window.location.href)
+  url.searchParams.set('chat', user.id)
+  window.history.pushState({}, '', url)
 }
 </script>
 

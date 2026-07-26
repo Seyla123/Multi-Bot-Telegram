@@ -16,22 +16,16 @@ import { PusherModule } from './pusher/pusher.module';
   imports: [
     ServeStaticModule.forRoot(
       {
-        rootPath: join(__dirname, '..', 'client/dist'),
+        rootPath: join(process.cwd(), 'client/dist'),
         exclude: ['/api/{*any}', '/telegram/{*any}', '/storage/{*any}'],
       },
       {
-        rootPath: join(__dirname, '..', 'storage'),
+        rootPath: join(process.cwd(), 'storage'),
         serveRoot: '/storage',
         exclude: ['/api/{*any}', '/telegram/{*any}'],
       }
     ),
     ConfigModule.forRoot({ isGlobal: true }),
-    TelegrafModule.forRootAsync({
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        token: configService.get<string>('TELEGRAM_BOT_TOKEN') || '',
-      }),
-    }),
     BullModule.forRoot({
       connection: {
         host: process.env.REDIS_HOST || 'localhost',

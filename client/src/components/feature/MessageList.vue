@@ -7,6 +7,7 @@ const props = defineProps<{
   messages: Message[]
   loading?: boolean
   error?: string | null
+  hasMore?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -14,6 +15,7 @@ const emit = defineEmits<{
   (e: 'reply', msg: Message): void
   (e: 'pin', msg: Message): void
   (e: 'delete', msg: Message): void
+  (e: 'loadMore'): void
 }>()
 
 const container = ref<HTMLElement | null>(null)
@@ -22,6 +24,10 @@ let userHasScrolledUp = false
 const handleScroll = (e: Event) => {
   const target = e.target as HTMLElement
   userHasScrolledUp = target.scrollHeight - target.clientHeight > target.scrollTop + 50
+  
+  if (target.scrollTop < 50 && props.hasMore && !props.loading) {
+    emit('loadMore')
+  }
 }
 
 const scrollToBottom = async () => {
@@ -46,8 +52,13 @@ defineExpose({
     ref="container"
     @scroll="handleScroll"
   >
-    <div v-if="loading" class="flex items-center justify-center h-full">
+    <div v-if="loading && !messages.length" class="flex items-center justify-center h-full">
       <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+    </div>
+    
+    <!-- Top loading indicator for pagination -->
+    <div v-if="loading && messages.length > 0" class="flex items-center justify-center py-2">
+      <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-accent"></div>
     </div>
     
     <div v-else-if="error" class="text-red-400 text-center mt-4">

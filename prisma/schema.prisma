@@ -17,10 +17,24 @@ model Video {
   updatedAt        DateTime @updatedAt
 }
 
+model TelegramBot {
+  id        Int      @id @default(autoincrement())
+  botId     String   @unique // The real bot ID from Telegram
+  botToken  String   @unique
+  name      String
+  username  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     TelegramUser[]
+}
+
 model TelegramUser {
   id           String   @id @default(uuid())
-  telegramId   String   @unique
-  botId        String?
+  telegramId   String   
+  botId        Int
+  bot          TelegramBot @relation(fields: [botId], references: [id])
   firstName    String
   lastName     String?
   username     String?
@@ -31,6 +45,8 @@ model TelegramUser {
   updatedAt    DateTime @updatedAt
 
   messages     TelegramMessage[]
+
+  @@unique([telegramId, botId], name: "telegramId_botId")
 }
 
 model TelegramMessage {

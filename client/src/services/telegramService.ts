@@ -13,13 +13,50 @@ export interface Message {
   isPinned?: boolean;
 }
 
+export interface Bot {
+  id: number;
+  botId: string;
+  botToken: string;
+  name: string;
+  username?: string;
+  isActive: boolean;
+}
+
 export const TelegramService = {
-  async getUsers(): Promise<User[]> {
-    return apiFetch<User[]>('/telegram/users');
+  async getBots(): Promise<{ data: Bot[] }> {
+    return apiFetch<{ data: Bot[] }>('/telegram/bots');
   },
 
-  async getMessages(userId: string): Promise<Message[]> {
-    return apiFetch<Message[]>(`/telegram/messages/${userId}`);
+  async createBot(payload: { name: string, botToken: string, username?: string }): Promise<Bot> {
+    const res = await apiFetch<any>('/telegram/bots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.success === false) throw new Error(res.message);
+    return res.data;
+  },
+
+  async deleteBot(botId: number): Promise<void> {
+    const res = await apiFetch<any>(`/telegram/bots/${botId}`, { method: 'DELETE' });
+    if (res.success === false) throw new Error(res.message);
+  },
+
+  async getUsers(page: number = 1, limit: number = 50, search: string = '', botId?: number): Promise<{ data: User[], meta: any }> {
+    const params = new URLSearchParams({ page: page.toString(), limit: limit.toString() });
+    if (search) params.append('search', search);
+    if (botId) params.append('botId', botId.toString());
+    return apiFetch<{ data: User[], meta: any }>(`/telegram/users?${params.toString()}`);
+  },
+
+  async markAsRead(userId: string): Promise<void> {
+    return apiFetch<void>(`/telegram/messages/${userId}/read`, {
+      method: 'POST',
+    })
+  },
+
+  async getMessages(userId: string, page: number = 1, limit: number = 50): Promise<{ data: Message[], meta: any }> {
+    return apiFetch<{ data: Message[], meta: any }>(`/telegram/messages/${userId}?page=${page}&limit=${limit}`);
   },
 
   async sendMessage(payload: { userId: string, text: string, telegramId: string, replyToId?: string, file?: File | null }): Promise<any> {

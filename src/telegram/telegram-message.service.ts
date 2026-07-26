@@ -108,10 +108,34 @@ export class TelegramMessageService {
     this.pusher.triggerNewMessage(updated);
     return updated;
   }
-  async getMessages(telegramUserId: string) {
-    return this.prisma.telegramMessage.findMany({
-      where: { telegramUserId },
-      orderBy: { createdAt: 'asc' },
+  async getMessages(telegramUserId: string, page: number = 1, limit: number = 50) {
+    const skip = (page - 1) * limit;
+    
+    const [messages, total] = await Promise.all([
+      this.prisma.telegramMessage.findMany({
+        where: { telegramUserId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.telegramMessage.count({ where: { telegramUserId } })
+    ]);
+
+    return {
+      data: messages.reverse(),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
+  }
+
+  async markAsRead(telegramUserId: string) {
+    await this.prisma.telegramMessage.updateMany({
+      where: { telegramUserId, status: 'unread' },
+      data: { status: 'read' },
     });
   }
 

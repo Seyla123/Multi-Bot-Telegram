@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import type { User } from '../App.vue'
-import type { Message } from '../services/telegramService'
+import { TelegramService, type Message } from '../services/telegramService'
 import { useTelegramMessages } from '../composables/useTelegramMessages'
 
 import ChatHeader from './feature/ChatHeader.vue'
@@ -19,6 +19,7 @@ const {
   loading,
   error,
   isSending,
+  hasMore,
   fetchMessages,
   sendMessage,
   deleteMessage,
@@ -30,14 +31,25 @@ const activeLightbox = ref<string | null>(null)
 const replyingTo = ref<Message | null>(null)
 const pinnedMessage = ref<Message | null>(null)
 
+const markAsRead = () => {
+  if (props.user.unreadCount && props.user.unreadCount > 0) {
+    props.user.unreadCount = 0
+    TelegramService.markAsRead(props.user.id).catch(err => {
+      console.error('Failed to mark as read', err)
+    })
+  }
+}
+
 watch(() => props.user.id, () => {
   replyingTo.value = null
-  fetchMessages(true)
+  fetchMessages(false)
+  markAsRead()
 })
 
 onMounted(() => {
-  fetchMessages(true)
+  fetchMessages(false)
   setupRealtime()
+  markAsRead()
 })
 
 const handleSend = async (text: string, file: File | null) => {
@@ -61,6 +73,8 @@ const handleSend = async (text: string, file: File | null) => {
       :messages="messages" 
       :loading="loading" 
       :error="error"
+      :hasMore="hasMore"
+      @loadMore="() => fetchMessages(true)"
       @media-click="url => activeLightbox = url"
       @reply="msg => replyingTo = msg"
       @pin="async (msg) => { pinnedMessage = msg; await togglePin(msg.id) }"

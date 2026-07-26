@@ -10,6 +10,7 @@ import { map } from 'rxjs/operators';
 export interface Response<T> {
   status: boolean;
   data: T | null;
+  meta?: any;
 }
 
 @Injectable()
@@ -26,10 +27,19 @@ export class TransformInterceptor<T> implements NestInterceptor<
     }
 
     return next.handle().pipe(
-      map((data) => ({
-        status: true,
-        data: data !== undefined ? data : null,
-      })),
+      map((data) => {
+        if (data && typeof data === 'object' && 'data' in data && 'meta' in data) {
+          return {
+            status: true,
+            data: data.data !== undefined ? data.data : null,
+            meta: data.meta,
+          };
+        }
+        return {
+          status: true,
+          data: data !== undefined ? data : null,
+        };
+      }),
     );
   }
 }

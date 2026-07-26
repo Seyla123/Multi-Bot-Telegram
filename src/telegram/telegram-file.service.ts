@@ -1,7 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { InjectBot } from 'nestjs-telegraf';
-import { Telegraf } from 'telegraf';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -10,11 +8,10 @@ export class TelegramFileService {
   private readonly logger = new Logger(TelegramFileService.name);
 
   constructor(
-    @InjectBot() private readonly bot: Telegraf,
     private configService: ConfigService,
   ) {}
 
-  async downloadAndSaveFile(fileId: string): Promise<string | null> {
+  async downloadAndSaveFileWithUrl(fileUrl: string, fileId: string): Promise<string | null> {
     try {
       // Ensure the storage directory exists
       const storageDir = path.join(process.cwd(), 'storage', 'telegram_files');
@@ -22,15 +19,7 @@ export class TelegramFileService {
         fs.mkdirSync(storageDir, { recursive: true });
       }
 
-      const file = await this.bot.telegram.getFile(fileId);
-      if (!file.file_path) {
-        this.logger.warn(`File ${fileId} does not have a file_path.`);
-        return null;
-      }
-
       // Download file using fetch
-      const botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
-      const fileUrl = `https://api.telegram.org/file/bot${botToken}/${file.file_path}`;
       const response = await fetch(fileUrl);
       
       if (!response.ok) {
@@ -38,7 +27,9 @@ export class TelegramFileService {
         return null;
       }
 
-      const originalExtension = path.extname(file.file_path);
+      // Try to parse original extension from URL path
+      const urlPath = new URL(fileUrl).pathname;
+      const originalExtension = path.extname(urlPath) || '';
       const storageFilename = `${fileId}${originalExtension}`;
       const storagePath = path.join(storageDir, storageFilename);
 

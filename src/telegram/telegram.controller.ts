@@ -1,78 +1,113 @@
-import { Controller, Get, Post, Body, Param, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseInterceptors, UploadedFile, Query, Delete, ParseIntPipe } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ConfigService } from '@nestjs/config';
-import { InjectBot } from 'nestjs-telegraf';
-import { Telegraf } from 'telegraf';
-
 import { TelegramUserService } from './telegram-user.service';
 import { TelegramMessageService } from './telegram-message.service';
+import { BotManagerService } from './bot-manager.service';
+import { TelegramBotService } from './telegram-bot.service';
+
+import { ConfigService } from '@nestjs/config';
 
 @Controller('telegram')
 export class TelegramController {
   constructor(
-    @InjectBot() private readonly bot: Telegraf,
-    private readonly configService: ConfigService,
     private readonly telegramUserService: TelegramUserService,
     private readonly telegramMessageService: TelegramMessageService,
+    private readonly botManagerService: BotManagerService,
+    private readonly telegramBotService: TelegramBotService,
+    private readonly configService: ConfigService,
   ) {}
 
-  @Get('set-webhook')
-  async setWebhook() {
-    const domain = this.configService.get<string>('TELEGRAM_WEBHOOK_DOMAIN');
-    if (!domain) {
-      return {
-        success: false,
-        message: 'TELEGRAM_WEBHOOK_DOMAIN is not set in .env',
-      };
-    }
+  // --- API Endpoints for Bots ---
 
-    const webhookUrl = `${domain}/telegram-webhook`;
-
-    // In order for webhook to work, long polling needs to be stopped if it's running
-    try {
-      await this.bot.launch();
-    } catch {
-      // Ignore if it was already polling
-    }
-
-    await this.bot.telegram.setWebhook(webhookUrl);
-
-    return {
-      success: true,
-      message: 'Webhook successfully set!',
-      url: webhookUrl,
-    };
+  @Get('bots')
+  async getBots() {
+    const bots = await this.telegramBotService.getAllBots();
+    return { data: bots };
   }
 
-  @Get('remove-webhook')
-  async removeWebhook() {
-    // 1. Delete the webhook from Telegram
-    await this.bot.telegram.deleteWebhook();
-
-    // 2. Explicitly stop the bot so it doesn't fall back to long polling
-    try {
-      this.bot.stop();
-    } catch {
-      // Ignore errors
+  @Get('set-webhooks')
+  async setWebhooks() {
+    const domain = this.configService.get<string>('TELEGRAM_WEBHOOK_DOMAIN');
+    if (!domain) {
+      return { success: false, message: 'TELEGRAM_WEBHOOK_DOMAIN not set in .env' };
     }
 
-    return {
-      success: true,
-      message:
-        'Webhook removed. The bot is now completely STOPPED and will not respond to any messages.',
-    };
+    const bots = await this.telegramBotService.getAllBots();
+    const results: any[] = [];
+    for (const bot of bots) {
+      if (bot.isActive) {
+        const telegraf = this.botManagerService.getBot(bot.id);
+        if (telegraf) {
+          try {
+            const webhookUrl = `${domain}/telegram/webhook/${bot.id}`;
+            await telegraf.telegram.setWebhook(webhookUrl);
+            results.push({ name: bot.name, success: true, url: webhookUrl });
+          } catch (error: any) {
+            results.push({ name: bot.name, success: false, message: error.message });
+          }
+        }
+      }
+    }
+    return { success: true, data: results };
+  }
+
+  @Post('webhook/:botId')
+  async handleWebhook(@Param('botId', ParseIntPipe) botId: number, @Body() update: any) {
+    await this.botManagerService.handleUpdate(botId, update);
+    return { success: true };
+  }
+
+  @Post('bots')
+  async createBot(@Body() body: { name: string; botToken: string; username?: string }) {
+    try {
+      const bot = await this.telegramBotService.createBot(body);
+      await this.botManagerService.startBot(bot.id, bot.botToken);
+      return { success: true, data: bot };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
+  }
+
+  @Delete('bots/:id')
+  async deleteBot(@Param('id', ParseIntPipe) id: number) {
+    try {
+      await this.botManagerService.stopBot(id);
+      await this.telegramBotService.deleteBot(id);
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
   }
 
   // --- API Endpoints for Frontend ---
 
   @Get('users')
-  async getUsers() {
-    return this.telegramUserService.getUsers();
+  async getUsers(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('botId') botId?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 50;
+    const botIdNum = botId ? parseInt(botId, 10) : undefined;
+    return this.telegramUserService.getUsers(pageNum, limitNum, search, botIdNum);
   }
 
   @Get('messages/:userId')
-  async getMessages(@Param('userId') userId: string) {
-    return this.telegramMessageService.getMessages(userId);
+  async getMessages(
+    @Param('userId') userId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 50;
+    return this.telegramMessageService.getMessages(userId, pageNum, limitNum);
+  }
+
+  @Post('messages/:userId/read')
+  async markAsRead(@Param('userId') userId: string) {
+    return this.telegramMessageService.markAsRead(userId);
   }
 
   @Post('messages/:userId')
@@ -91,6 +126,16 @@ export class TelegramController {
     }
 
     try {
+      const user = await this.telegramUserService.getUserById(userId);
+      if (!user || !user.botId) {
+        return { success: false, message: 'User not found or not associated with any bot' };
+      }
+
+      const bot = this.botManagerService.getBot(user.botId);
+      if (!bot) {
+        return { success: false, message: 'Bot instance not found or not running' };
+      }
+
       let sentMsg: any;
       let messageType = 'text';
       let filePath: string | undefined = undefined;
@@ -116,19 +161,19 @@ export class TelegramController {
 
         if (mimeType.startsWith('image/')) {
           messageType = 'photo';
-          sentMsg = await this.bot.telegram.sendPhoto(telegramId, source, { caption: text });
+          sentMsg = await bot.telegram.sendPhoto(telegramId, source, { caption: text });
         } else if (mimeType.startsWith('video/')) {
           messageType = 'video';
-          sentMsg = await this.bot.telegram.sendVideo(telegramId, source, { caption: text });
+          sentMsg = await bot.telegram.sendVideo(telegramId, source, { caption: text });
         } else if (mimeType.startsWith('audio/') || mimeType.includes('voice')) {
           messageType = 'voice';
-          sentMsg = await this.bot.telegram.sendVoice(telegramId, source, { caption: text });
+          sentMsg = await bot.telegram.sendVoice(telegramId, source, { caption: text });
         } else {
           messageType = 'document';
-          sentMsg = await this.bot.telegram.sendDocument(telegramId, source, { caption: text });
+          sentMsg = await bot.telegram.sendDocument(telegramId, source, { caption: text });
         }
       } else {
-        sentMsg = await this.bot.telegram.sendMessage(telegramId, text);
+        sentMsg = await bot.telegram.sendMessage(telegramId, text);
       }
       
       // 2. Save in database
