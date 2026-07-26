@@ -1,98 +1,118 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# NestJS Telegram Multi-Bot Dashboard
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A comprehensive, production-ready platform for managing multiple Telegram bots from a single, unified web dashboard. Built with a powerful **NestJS** backend and a reactive **Vue 3** frontend, this system allows you to manage users, send text and media messages, process background jobs, and monitor system health all in one place.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## 🚀 Key Features
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+* **Multi-Bot Management:** Add and manage multiple Telegram bots simultaneously using their bot tokens. Webhooks are automatically configured.
+* **Unified Chat Interface:** A beautiful Vue 3 frontend dashboard to interact with users across all your bots. Send text, images, videos, and documents seamlessly.
+* **Real-time Updates:** Powered by **Pusher**, incoming Telegram messages instantly appear in the web dashboard without needing to refresh.
+* **Database & ORM:** Built on **MySQL** and **Prisma ORM** for type-safe, robust data modeling (Users, Bots, Messages, etc.).
+* **Background Processing:** Integrated with **BullMQ** and Redis to handle heavy tasks (like video processing and email queuing) asynchronously without blocking the main event loop.
+* **Built-in Log Viewer:** Uses **Winston** for daily rotating file logs, which are accessible directly through a beautiful custom UI built into the dashboard.
 
-## Project setup
+## 🛠️ Technology Stack
 
-```bash
-$ npm install
+### Backend
+- **NestJS** (Node.js Framework)
+- **Prisma** (Next-generation ORM)
+- **MySQL** (Relational Database)
+- **BullMQ & Redis** (Background Jobs & Message Queues)
+- **Telegraf** (Telegram Bot API Wrapper)
+- **Winston** (Advanced Logging)
+
+### Frontend
+- **Vue 3** (Composition API)
+- **Vite** (Next Generation Frontend Tooling)
+- **TailwindCSS** (Utility-first CSS framework)
+
+---
+
+## 📦 Getting Started
+
+### Prerequisites
+Make sure you have the following installed on your system:
+- **Node.js** (v18 or higher)
+- **Docker** and **Docker Compose** (for easy database and redis setup)
+- A Telegram account (to create bots via [@BotFather](https://t.me/botfather))
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/yourusername/nest-telegram-dashboard.git
+   cd nest-telegram-dashboard
+   ```
+
+2. **Environment Configuration:**
+   Copy the `.env.example` file to `.env` and fill in your details:
+   ```bash
+   cp .env.example .env
+   ```
+   *Make sure to set `TELEGRAM_WEBHOOK_DOMAIN` to your public URL (e.g., ngrok URL for local development) so Telegram can send updates to your backend.*
+
+3. **Start the Infrastructure (Database & Redis):**
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Install Dependencies:**
+   ```bash
+   # Install backend dependencies
+   npm install
+
+   # Install frontend dependencies
+   cd client && npm install && cd ..
+   ```
+
+5. **Run Database Migrations:**
+   ```bash
+   npx prisma db push
+   npx prisma generate
+   ```
+
+6. **Build the Frontend:**
+   ```bash
+   cd client && npm run build && cd ..
+   ```
+
+7. **Start the Application:**
+   ```bash
+   npm run start:dev
+   ```
+
+---
+
+## 💻 Usage
+
+1. Open your browser and navigate to `http://localhost:3000`.
+2. Click on the **"Add Bot"** button in the sidebar.
+3. Paste the Bot Token provided by Telegram's BotFather.
+4. The system will automatically register the bot, set up the webhook, and start listening for messages!
+5. When a user messages your bot on Telegram, they will appear in the dashboard where you can chat with them directly.
+6. Click **"System Logs"** at the bottom of the sidebar to view backend activity and errors in real-time.
+
+---
+
+## 🏗️ Project Structure
+
+```text
+├── client/                 # Vue 3 Frontend SPA
+│   ├── src/components/     # UI Components (ChatArea, Sidebar, LogsViewer)
+│   └── src/services/       # API integration
+├── prisma/                 # Database Schema & Migrations
+│   └── schema.prisma       # Prisma data models
+├── src/                    # NestJS Backend
+│   ├── telegram/           # Telegram core logic & webhook handlers
+│   ├── logs/               # Log serving endpoints
+│   ├── emails/             # Email services
+│   ├── videos/             # Video processing & BullMQ workers
+│   └── pusher/             # Websocket event broadcasting
+└── storage/                # Local file storage (Media & Logs)
 ```
 
-## Compile and run the project
+## 📝 License
 
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
-```
-
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+This project is licensed under the MIT License. Feel free to use it, modify it, and contribute!
