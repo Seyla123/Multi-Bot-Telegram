@@ -32,9 +32,21 @@ const emit = defineEmits<{
         type="text" 
         :value="modelValue"
         @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
-        class="w-full bg-[#2c2c2c] text-text-main text-[15px] rounded-full pl-10 pr-4 py-1.5 outline-none border-2 border-transparent focus:border-accent transition-colors"
+        @keydown.escape.prevent="emit('update:modelValue', '')"
+        class="w-full bg-black/20 text-text-main text-[14px] rounded-full pl-10 pr-10 py-2 outline-none border border-white/5 focus:border-accent/50 focus:bg-black/30 transition-all shadow-inner"
         placeholder="Search"
       />
+      <!-- Clear Search Button -->
+      <button 
+        v-if="modelValue"
+        @click="emit('update:modelValue', '')"
+        class="absolute inset-y-0 right-0 pr-3 flex items-center text-text-muted hover:text-white transition-colors"
+        aria-label="Clear search"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
     </div>
   </div>
 </template>

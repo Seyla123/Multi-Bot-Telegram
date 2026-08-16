@@ -12,19 +12,36 @@ import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { PusherModule } from './pusher/pusher.module';
 import { LogsModule } from './logs/logs.module';
+import { AuthModule } from './auth/auth.module';
+import { AdminModule } from './admin/admin.module';
+import { ClientServiceModule } from './client-service/client-service.module';
+import { AdminClientsModule } from './admin-clients/admin-clients.module';
 
 @Module({
   imports: [
     ServeStaticModule.forRoot(
       {
         rootPath: join(process.cwd(), 'client/dist'),
-        exclude: ['/api/{*any}', '/telegram/{*any}', '/storage/{*any}', '/logs/{*any}', '/logs'],
+        exclude: [
+          '/api/{*any}',
+          '/telegram/{*any}',
+          '/storage/{*any}',
+          '/logs/{*any}',
+          '/logs',
+          '/auth/{*any}',
+          '/admin/{*any}',
+        ],
       },
       {
         rootPath: join(process.cwd(), 'storage'),
         serveRoot: '/storage',
-        exclude: ['/api/{*any}', '/telegram/{*any}'],
-      }
+        exclude: [
+          '/api/{*any}',
+          '/telegram/{*any}',
+          '/auth/{*any}',
+          '/admin/{*any}',
+        ],
+      },
     ),
     ConfigModule.forRoot({ isGlobal: true }),
     BullModule.forRoot({
@@ -39,6 +56,10 @@ import { LogsModule } from './logs/logs.module';
     TelegramModule,
     PusherModule,
     LogsModule,
+    AuthModule,
+    AdminModule,
+    ClientServiceModule,
+    AdminClientsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

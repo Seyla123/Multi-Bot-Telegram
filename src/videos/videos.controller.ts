@@ -40,8 +40,6 @@ export class VideosController {
 
   @Get()
   findAll(@Query('sort') sort: 'asc' | 'desc' = 'asc') {
-    // throw new NotFoundException("Not implement");
-    console.log(sort);
     return this.videosService.findAll();
   }
 

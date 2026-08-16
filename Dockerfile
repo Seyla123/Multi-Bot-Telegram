@@ -6,6 +6,9 @@ WORKDIR /usr/src/app
 # A wildcard is used to ensure both package.json AND package-lock.json are copied
 COPY package*.json ./
 
+# Copy prisma schema so postinstall "prisma generate" can run successfully
+COPY prisma ./prisma/
+
 # Install app dependencies
 RUN npm install
 

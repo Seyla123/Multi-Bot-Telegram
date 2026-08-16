@@ -67,4 +67,43 @@ export class PusherService implements OnModuleInit {
       this.logger.error('Failed to trigger message_unpinned event', error);
     }
   }
+
+  async triggerMessagesRead(telegramUserId: string) {
+    if (!this.pusher) return;
+    try {
+      await this.pusher.trigger(this.channel, 'messages_read', { telegramUserId });
+    } catch (error) {
+      this.logger.error('Failed to trigger messages_read event', error);
+    }
+  }
+
+  async triggerConversationUpdated(payload: {
+    telegramUserId: string;
+    conversationStatus: string;
+    assignedAgentId: string | null;
+    assignedAgent: { id: string; name: string } | null;
+  }) {
+    if (!this.pusher) return;
+    const event = payload.assignedAgentId ? 'conversation_assigned' : 'conversation_unassigned';
+    try {
+      await this.pusher.trigger(this.channel, event, payload);
+    } catch (error) {
+      this.logger.error(`Failed to trigger ${event} event`, error);
+    }
+  }
+
+  async triggerConversationStatusChanged(payload: {
+    telegramUserId: string;
+    conversationStatus: string;
+    assignedAgentId: string | null;
+    assignedAgent: { id: string; name: string } | null;
+  }) {
+    if (!this.pusher) return;
+    const event = payload.conversationStatus === 'RESOLVED' ? 'conversation_resolved' : 'conversation_reopened';
+    try {
+      await this.pusher.trigger(this.channel, event, payload);
+    } catch (error) {
+      this.logger.error(`Failed to trigger ${event} event`, error);
+    }
+  }
 }

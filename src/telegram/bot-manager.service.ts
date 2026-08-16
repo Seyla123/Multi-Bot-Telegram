@@ -10,6 +10,8 @@ import { ConfigService } from '@nestjs/config';
 export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BotManagerService.name);
   private bots: Map<number, Telegraf> = new Map();
+  private allowedUserId?: string;
+  private processedUpdates: Set<number> = new Set(); // Basic in-memory idempotency
 
   constructor(
     private readonly botService: TelegramBotService,
@@ -20,6 +22,19 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit() {
+    this.allowedUserId = this.configService.get<string>('TELEGRAM_ALLOWED_USER_ID');
+    
+    // Safety check: Abort startup if Telegram mocking is enabled in a production environment
+    const appEnv = this.configService.get<string>('APP_ENV');
+    const nodeEnv = this.configService.get<string>('NODE_ENV');
+    const isMockEnabled = this.configService.get<string>('TELEGRAM_MOCK') === 'true';
+
+    if (isMockEnabled && (appEnv === 'production' || nodeEnv === 'production')) {
+      const errorMsg = `FATAL CONFIGURATION ERROR: Outbound Telegram API mocking (TELEGRAM_MOCK=true) is NOT allowed in production mode (APP_ENV/NODE_ENV=production). Startup aborted for safety.`;
+      this.logger.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
     await this.initializeBots();
   }
 
@@ -51,6 +66,65 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
     try {
       const bot = new Telegraf(botToken);
+
+      const isMockEnabled = String(this.configService.get('TELEGRAM_MOCK') || 'false').toLowerCase() === 'true';
+      if (isMockEnabled) {
+        this.logger.log(`Mocking outbound Telegram Bot API calls for bot ${botId}`);
+        bot.telegram.sendMessage = async (chatId, text, extra) => {
+          this.logger.debug(`[MOCK TELEGRAM] sendMessage to ${chatId}: ${text}`);
+          return {
+            message_id: Math.round(Math.random() * 1000000),
+            chat: { id: typeof chatId === 'string' ? parseInt(chatId, 10) || 123456789 : chatId, type: 'private' },
+            date: Math.floor(Date.now() / 1000),
+            text
+          } as any;
+        };
+        bot.telegram.sendPhoto = async (chatId, photo, extra) => {
+          this.logger.debug(`[MOCK TELEGRAM] sendPhoto to ${chatId}`);
+          return {
+            message_id: Math.round(Math.random() * 1000000),
+            chat: { id: typeof chatId === 'string' ? parseInt(chatId, 10) || 123456789 : chatId, type: 'private' },
+            date: Math.floor(Date.now() / 1000),
+            photo: []
+          } as any;
+        };
+        bot.telegram.sendVideo = async (chatId, video, extra) => {
+          this.logger.debug(`[MOCK TELEGRAM] sendVideo to ${chatId}`);
+          return {
+            message_id: Math.round(Math.random() * 1000000),
+            chat: { id: typeof chatId === 'string' ? parseInt(chatId, 10) || 123456789 : chatId, type: 'private' },
+            date: Math.floor(Date.now() / 1000),
+            video: {}
+          } as any;
+        };
+        bot.telegram.sendVoice = async (chatId, voice, extra) => {
+          this.logger.debug(`[MOCK TELEGRAM] sendVoice to ${chatId}`);
+          return {
+            message_id: Math.round(Math.random() * 1000000),
+            chat: { id: typeof chatId === 'string' ? parseInt(chatId, 10) || 123456789 : chatId, type: 'private' },
+            date: Math.floor(Date.now() / 1000),
+            voice: {}
+          } as any;
+        };
+        bot.telegram.sendDocument = async (chatId, doc, extra) => {
+          this.logger.debug(`[MOCK TELEGRAM] sendDocument to ${chatId}`);
+          return {
+            message_id: Math.round(Math.random() * 1000000),
+            chat: { id: typeof chatId === 'string' ? parseInt(chatId, 10) || 123456789 : chatId, type: 'private' },
+            date: Math.floor(Date.now() / 1000),
+            document: {}
+          } as any;
+        };
+        bot.telegram.setWebhook = async (url, extra) => {
+          this.logger.debug(`[MOCK TELEGRAM] setWebhook to ${url}`);
+          return true;
+        };
+        bot.telegram.getFileLink = async (fileId) => {
+          this.logger.debug(`[MOCK TELEGRAM] getFileLink for ${fileId}`);
+          return new URL(`http://localhost:3000/mock-file/${fileId}`);
+        };
+      }
+
       this.setupBotListeners(bot, botId);
 
       // We don't launch polling here anymore, we rely on webhooks
@@ -76,11 +150,57 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
 
   async handleUpdate(botId: number, update: any) {
     const bot = this.bots.get(botId);
-    if (bot) {
-      // Create a dummy res object since Telegraf's handleUpdate expects one, but we just need it to process the body
-      await bot.handleUpdate(update);
-    } else {
+    if (!bot) {
       this.logger.warn(`Received update for unknown bot ${botId}`);
+      return;
+    }
+
+    // Basic idempotency check for webhooks
+    if (update.update_id) {
+      if (this.processedUpdates.has(update.update_id)) {
+        this.logger.debug(`Skipping already processed update ${update.update_id}`);
+        return;
+      }
+      this.processedUpdates.add(update.update_id);
+      // Clean up old updates to prevent memory leak (simple approach: keep only last 1000)
+      if (this.processedUpdates.size > 1000) {
+        const firstItem = this.processedUpdates.values().next().value;
+        if (firstItem !== undefined) {
+           this.processedUpdates.delete(firstItem);
+        }
+      }
+    }
+
+    await bot.handleUpdate(update);
+  }
+
+  async sendTextMessage(botId: number, telegramId: string, text: string) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error('Bot instance not found or not running');
+    return bot.telegram.sendMessage(telegramId, text);
+  }
+
+  async sendMediaMessage(botId: number, telegramId: string, text: string, file: Express.Multer.File) {
+    const bot = this.bots.get(botId);
+    if (!bot) throw new Error('Bot instance not found or not running');
+    
+    // Instead of buffer, we use the saved file path on disk (from multer diskStorage)
+    // Create ReadStream to avoid loading the entire file into memory
+    const fs = await import('fs');
+    if (!fs.existsSync(file.path)) {
+      throw new Error(`File not found at path: ${file.path}`);
+    }
+    const source = { source: fs.createReadStream(file.path), filename: file.originalname };
+    const mimeType = file.mimetype || '';
+
+    if (mimeType.startsWith('image/')) {
+      return bot.telegram.sendPhoto(telegramId, source, { caption: text });
+    } else if (mimeType.startsWith('video/')) {
+      return bot.telegram.sendVideo(telegramId, source, { caption: text });
+    } else if (mimeType.startsWith('audio/') || mimeType.includes('voice')) {
+      return bot.telegram.sendVoice(telegramId, source, { caption: text });
+    } else {
+      return bot.telegram.sendDocument(telegramId, source, { caption: text });
     }
   }
 
@@ -90,8 +210,7 @@ export class BotManagerService implements OnModuleInit, OnModuleDestroy {
     });
 
     bot.command('status', async (ctx) => {
-      const allowedUserId = this.configService.get<string>('TELEGRAM_ALLOWED_USER_ID');
-      if (allowedUserId && ctx.from?.id.toString() !== allowedUserId) {
+      if (this.allowedUserId && ctx.from?.id.toString() !== this.allowedUserId) {
         return; // unauthorized
       }
       await ctx.reply('All systems are operational.');

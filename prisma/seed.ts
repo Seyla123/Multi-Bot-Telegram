@@ -1,35 +1,33 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, AgentRole } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding 1000 messages started...');
-
-  const userId = '1d62419e-4c4e-410b-8aa3-24e819924171';
-
-  // Check if user exists
-  const user = await prisma.telegramUser.findUnique({
-    where: { id: userId },
-  });
-
-  if (!user) {
-    console.log(`User with ID ${userId} not found.`);
+  console.log('Seeding initial agent...');
+  
+  const email = 'admin@support.com';
+  const existingAgent = await prisma.agent.findUnique({ where: { email } });
+  
+  if (existingAgent) {
+    console.log('Agent already exists.');
     return;
   }
-
-  const messages = Array.from({ length: 1000 }).map((_, i) => ({
-    telegramUserId: userId,
-    messageType: 'text',
-    text: `This is dummy message ${i + 1} for testing pagination in chat.`,
-    messageId: `msg_${userId}_${i + 1}_${Date.now()}`,
-    status: i % 2 === 0 ? 'sent' : 'received',
-  }));
-
-  await prisma.telegramMessage.createMany({
-    data: messages,
+  
+  const passwordHash = await bcrypt.hash('admin123', 10);
+  
+  const agent = await prisma.agent.create({
+    data: {
+      name: 'Admin Agent',
+      email,
+      passwordHash,
+      role: AgentRole.ADMIN,
+    },
   });
-
-  console.log('1000 messages seeded successfully.');
+  
+  console.log(`Agent created successfully! ID: ${agent.id}`);
+  console.log(`Email: ${email}`);
+  console.log(`Password: admin123`);
 }
 
 main()

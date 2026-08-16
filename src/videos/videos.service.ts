@@ -8,7 +8,6 @@ export class VideosService {
   constructor(private prisma: PrismaService) {}
 
   async create(createVideoDto: CreateVideoDto) {
-    // This tells Prisma to INSERT INTO videos...
     return this.prisma.video.create({
       data: {
         title: createVideoDto.title,
@@ -18,7 +17,6 @@ export class VideosService {
   }
 
   async findAll() {
-    // This tells Prisma to SELECT * FROM videos...
     return this.prisma.video.findMany({
       orderBy: { createdAt: 'desc' },
     });
@@ -57,9 +55,7 @@ export class VideosService {
   }
 
   async remove(id: string) {
-    // First check if it exists
     await this.findOne(id);
-    // DELETE FROM videos WHERE id = ...
     return this.prisma.video.delete({
       where: { id },
     });

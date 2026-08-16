@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import 'emoji-picker-element'
 import type { Message } from '../../services/telegramService'
 import { useAudioRecorder } from '../../composables/useAudioRecorder'
 import BaseIconButton from '../core/BaseIconButton.vue'
@@ -15,9 +16,66 @@ const emit = defineEmits<{
 }>()
 
 const inputText = ref('')
+const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const selectedFile = ref<File | null>(null)
 const selectedFileUrl = ref<string | null>(null)
+
+// Emoji Picker State
+const showEmojiPicker = ref(false)
+const emojiPickerRef = ref<HTMLElement | null>(null)
+const emojiBtnRef = ref<HTMLElement | null>(null)
+
+const toggleEmojiPicker = () => {
+  showEmojiPicker.value = !showEmojiPicker.value
+}
+
+const handleEmojiSelect = (e: any) => {
+  const emoji = e.detail.unicode
+  if (!textareaRef.value) {
+    inputText.value += emoji
+    return
+  }
+  
+  // Insert at cursor
+  const start = textareaRef.value.selectionStart
+  const end = textareaRef.value.selectionEnd
+  const current = inputText.value
+  inputText.value = current.substring(0, start) + emoji + current.substring(end)
+  
+  // Restore focus and cursor position after Vue update
+  nextTick(() => {
+    if (textareaRef.value) {
+      textareaRef.value.focus()
+      textareaRef.value.selectionStart = textareaRef.value.selectionEnd = start + emoji.length
+    }
+  })
+}
+
+const handleClickOutsideEmoji = (e: MouseEvent | TouchEvent) => {
+  if (showEmojiPicker.value && emojiPickerRef.value && !emojiPickerRef.value.contains(e.target as Node) && emojiBtnRef.value && !emojiBtnRef.value.contains(e.target as Node)) {
+    showEmojiPicker.value = false
+  }
+}
+
+const handleKeydownEmoji = (e: KeyboardEvent) => {
+  if (e.key === 'Escape' && showEmojiPicker.value) {
+    showEmojiPicker.value = false
+    textareaRef.value?.focus()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('mousedown', handleClickOutsideEmoji)
+  document.addEventListener('touchstart', handleClickOutsideEmoji)
+  document.addEventListener('keydown', handleKeydownEmoji)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('mousedown', handleClickOutsideEmoji)
+  document.removeEventListener('touchstart', handleClickOutsideEmoji)
+  document.removeEventListener('keydown', handleKeydownEmoji)
+})
 
 const {
   isRecording,
@@ -110,7 +168,7 @@ const toggleRecording = () => {
                 v-model="inputText"
                 @keydown.enter.exact.prevent="handleSubmit"
                 placeholder="Add a caption..."
-                class="flex-1 bg-transparent border-none py-3.5 px-4 focus:outline-none text-text-main placeholder-text-muted text-[15px] resize-none min-h-[50px] max-h-[120px] overflow-y-auto"
+                class="flex-1 bg-transparent border-none py-3.5 px-4 focus:outline-none text-text-main placeholder-text-muted text-[16px] resize-none min-h-[50px] max-h-[120px] overflow-y-auto"
                 rows="1"
                 :disabled="isSending"
                 autofocus
@@ -130,7 +188,8 @@ const toggleRecording = () => {
     </div>
 
     <!-- Main Input Area (Hidden when modal is open) -->
-    <div v-show="!selectedFile" class="px-4 py-3 flex flex-col gap-2 shrink-0 max-w-4xl mx-auto w-full z-10 bg-bg-chat">
+    <div v-show="!selectedFile" class="px-2 md:px-4 py-2 md:py-3 flex flex-col gap-2 shrink-0 max-w-4xl mx-auto w-full z-10 bg-bg-chat">
+
       <!-- Reply Preview Banner -->
       <div v-if="replyingTo" class="flex items-center justify-between px-3 py-2 border-l-[3px] border-accent bg-black/20 rounded-r-lg mb-1">
         <div class="flex flex-col min-w-0">
@@ -145,6 +204,15 @@ const toggleRecording = () => {
       <form @submit.prevent="handleSubmit" class="flex gap-2 items-end w-full relative">
         <input type="file" ref="fileInput" @change="handleFileChange" class="hidden" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" />
         
+        <!-- Emoji Picker Popover -->
+        <div 
+          v-if="showEmojiPicker" 
+          ref="emojiPickerRef"
+          class="absolute bottom-[65px] right-2 z-50 shadow-2xl rounded-xl overflow-hidden border border-white/10"
+        >
+          <emoji-picker class="dark" @emoji-click="handleEmojiSelect"></emoji-picker>
+        </div>
+
         <div class="flex-1 bg-bg-sidebar border border-white/5 rounded-3xl flex items-end shadow-sm relative overflow-hidden">
           
           <!-- Recording Overlay -->
@@ -161,23 +229,29 @@ const toggleRecording = () => {
           <button 
             type="button" 
             @click="fileInput?.click()" 
-            class="text-text-muted hover:text-accent transition-colors p-3.5 shrink-0 ml-1"
+            class="text-text-muted hover:text-accent transition-colors p-3.5 shrink-0 ml-1 active:scale-90"
             title="Attach File"
           >
             <svg class="w-[22px] h-[22px] transform -rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
           </button>
           
           <textarea 
+            ref="textareaRef"
             v-model="inputText"
             @keydown.enter.exact.prevent="handleSubmit"
             placeholder="Write a message..."
-            class="flex-1 bg-transparent border-none py-[14px] focus:outline-none text-text-main placeholder-text-muted text-[15px] resize-none min-h-[50px] max-h-[150px] overflow-y-auto"
+            class="flex-1 bg-transparent border-none py-[14px] focus:outline-none text-text-main placeholder-text-muted text-[16px] resize-none min-h-[50px] max-h-[150px] overflow-y-auto"
             rows="1"
             :disabled="isSending || isRecording"
           ></textarea>
           
-          <div class="p-3.5 shrink-0 text-text-muted hover:text-accent transition-colors cursor-pointer mr-1">
-            <!-- Emoji Icon placeholder -->
+          <div 
+            ref="emojiBtnRef"
+            @click="toggleEmojiPicker"
+            class="p-3.5 shrink-0 transition-colors cursor-pointer mr-1 active:scale-90"
+            :class="showEmojiPicker ? 'text-accent' : 'text-text-muted hover:text-accent'"
+          >
+            <!-- Emoji Icon -->
             <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
           </div>
         </div>
@@ -185,7 +259,7 @@ const toggleRecording = () => {
         <button 
           v-if="!isRecording"
           type="submit" 
-          class="w-[50px] h-[50px] rounded-full bg-accent hover:bg-accent-hover disabled:bg-bg-sidebar disabled:text-text-muted text-white flex items-center justify-center shrink-0 transition-colors shadow-sm"
+          class="w-[50px] h-[50px] rounded-full bg-accent hover:bg-accent-hover disabled:bg-bg-sidebar disabled:text-text-muted text-white flex items-center justify-center shrink-0 transition-all duration-200 active:scale-90 shadow-sm"
           :disabled="isSending"
         >
           <!-- Show Send arrow if text is entered -->
@@ -198,7 +272,7 @@ const toggleRecording = () => {
           v-else
           type="button"
           @click="handleSubmit"
-          class="w-[50px] h-[50px] rounded-full bg-accent hover:bg-accent-hover text-white flex items-center justify-center shrink-0 transition-colors shadow-sm"
+          class="w-[50px] h-[50px] rounded-full bg-accent hover:bg-accent-hover text-white flex items-center justify-center shrink-0 transition-all duration-200 active:scale-90 shadow-sm"
         >
           <!-- Send Audio Arrow -->
           <svg class="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>

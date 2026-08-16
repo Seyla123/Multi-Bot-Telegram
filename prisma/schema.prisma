@@ -40,11 +40,14 @@ model TelegramUser {
   username     String?
   phoneNumber  String?
   profileImage String?
-  status       String   @default("active")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  status             String   @default("active") // Preserve existing behavior
+  conversationStatus String   @default("OPEN") // OPEN | RESOLVED
+  assignedAgentId    String?
+  assignedAgent      Agent?   @relation("AssignedConversations", fields: [assignedAgentId], references: [id])
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  messages     TelegramMessage[]
+  messages           TelegramMessage[]
 
   @@unique([telegramId, botId], name: "telegramId_botId")
 }
@@ -60,4 +63,78 @@ model TelegramMessage {
   filePath       String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+  agentId        String?
+  agent          Agent?       @relation(fields: [agentId], references: [id])
+}
+
+model Agent {
+  id           String            @id @default(uuid())
+  name         String
+  email        String            @unique
+  passwordHash          String
+  role                  AgentRole         @default(AGENT)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  messages              TelegramMessage[]
+  assignedConversations TelegramUser[]    @relation("AssignedConversations")
+  apiTokens             ApiToken[]
+}
+
+enum ApiTokenType {
+  CLIENT
+  PERSONAL
+}
+
+enum ApiTokenStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum ApiTokenEnvironment {
+  LIVE
+  TEST
+}
+
+model ApiToken {
+  id        String       @id @default(uuid())
+  name      String
+  description String?
+  tokenHash String       @unique
+  preview   String       @default("")
+  type      ApiTokenType
+  status    ApiTokenStatus @default(ACTIVE)
+  environment ApiTokenEnvironment @default(LIVE)
+  permissions Json
+  allowedIps Json
+  rateLimitPerMin Int @default(60)
+  dailyQuota Int @default(10000)
+  expiresAt DateTime?
+  lastUsedAt DateTime?
+  lastUsedIp String?
+  agentId   String?
+  agent     Agent?       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  requestLogs ApiRequestLog[]
+
+  @@index([agentId])
+}
+
+model ApiRequestLog {
+  id String @id @default(uuid())
+  clientId String
+  client ApiToken @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  service String
+  statusCode Int
+  latencyMs Int
+  ipAddress String?
+  errorMessage String? @db.Text
+  createdAt DateTime @default(now())
+  @@index([clientId, createdAt])
+}
+
+enum AgentRole {
+  ADMIN
+  AGENT
 }

@@ -1,13 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+import { Message } from 'telegraf/types';
+
 export interface ParsedMessage {
   messageType: string;
   textContent: string | null;
   fileId: string | null;
 }
-
-type MessageHandler = (message: any) => ParsedMessage;
 
 import { PusherService } from '../pusher/pusher.service';
 
@@ -19,41 +19,6 @@ export class TelegramMessageService {
     private readonly prisma: PrismaService,
     private readonly pusher: PusherService,
   ) {}
-
-  private readonly handlers: Record<string, MessageHandler> = {
-    text: (msg) => ({
-      messageType: 'text',
-      textContent: msg.text,
-      fileId: null,
-    }),
-    photo: (msg) => {
-      const photo = msg.photo[msg.photo.length - 1]; // Get highest resolution
-      return this.createMediaPayload('photo', photo.file_id, {
-        file_size: photo.file_size,
-        width: photo.width,
-        height: photo.height,
-        caption: msg.caption || null,
-      });
-    },
-    video: (msg) =>
-      this.createMediaPayload('video', msg.video.file_id, {
-        duration: msg.video.duration,
-        width: msg.video.width,
-        height: msg.video.height,
-        caption: msg.caption || null,
-      }),
-    document: (msg) =>
-      this.createMediaPayload('document', msg.document.file_id, {
-        file_name: msg.document.file_name,
-        mime_type: msg.document.mime_type,
-        caption: msg.caption || null,
-      }),
-    voice: (msg) =>
-      this.createMediaPayload('voice', msg.voice.file_id, {
-        duration: msg.voice.duration,
-        mime_type: msg.voice.mime_type,
-      }),
-  };
 
   private createMediaPayload(
     type: string,
@@ -67,14 +32,49 @@ export class TelegramMessageService {
     };
   }
 
-  parseMessage(message: any): ParsedMessage | null {
+  parseMessage(message: Message): ParsedMessage | null {
     if (!message) return null;
 
-    // Dynamically find and execute the correct handler based on the message keys
-    for (const [key, handler] of Object.entries(this.handlers)) {
-      if (key in message) {
-        return handler(message);
-      }
+    if ('text' in message) {
+      return {
+        messageType: 'text',
+        textContent: message.text,
+        fileId: null,
+      };
+    }
+
+    if ('photo' in message && message.photo.length > 0) {
+      const photo = message.photo[message.photo.length - 1]; // Get highest resolution
+      return this.createMediaPayload('photo', photo.file_id, {
+        file_size: photo.file_size,
+        width: photo.width,
+        height: photo.height,
+        caption: 'caption' in message ? message.caption : null,
+      });
+    }
+
+    if ('video' in message) {
+      return this.createMediaPayload('video', message.video.file_id, {
+        duration: message.video.duration,
+        width: message.video.width,
+        height: message.video.height,
+        caption: 'caption' in message ? message.caption : null,
+      });
+    }
+
+    if ('document' in message) {
+      return this.createMediaPayload('document', message.document.file_id, {
+        file_name: message.document.file_name,
+        mime_type: message.document.mime_type,
+        caption: 'caption' in message ? message.caption : null,
+      });
+    }
+
+    if ('voice' in message) {
+      return this.createMediaPayload('voice', message.voice.file_id, {
+        duration: message.voice.duration,
+        mime_type: message.voice.mime_type,
+      });
     }
 
     this.logger.warn('Unsupported message type received');
@@ -117,6 +117,11 @@ export class TelegramMessageService {
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
+        include: {
+          agent: {
+            select: { id: true, name: true }
+          }
+        }
       }),
       this.prisma.telegramMessage.count({ where: { telegramUserId } })
     ]);
@@ -133,21 +138,30 @@ export class TelegramMessageService {
   }
 
   async markAsRead(telegramUserId: string) {
-    await this.prisma.telegramMessage.updateMany({
+    const result = await this.prisma.telegramMessage.updateMany({
       where: { telegramUserId, status: 'unread' },
       data: { status: 'read' },
     });
+    if (result.count > 0) {
+      this.pusher.triggerMessagesRead(telegramUserId);
+    }
   }
 
-  async saveOutgoingMessage(telegramUserId: string, text: string, messageId: string) {
+  async saveOutgoingMessage(telegramUserId: string, text: string, messageId: string, agentId?: string) {
     const saved = await this.prisma.telegramMessage.create({
       data: {
         telegramUserId,
         messageType: 'text',
         text,
         messageId,
+        agentId,
         status: 'sent', // Mark as sent to distinguish from incoming
       },
+      include: {
+        agent: {
+          select: { id: true, name: true }
+        }
+      }
     });
     this.pusher.triggerNewMessage(saved);
     return saved;
@@ -159,6 +173,7 @@ export class TelegramMessageService {
     messageId: string,
     messageType: string,
     filePath: string,
+    agentId?: string,
   ) {
     const saved = await this.prisma.telegramMessage.create({
       data: {
@@ -167,8 +182,14 @@ export class TelegramMessageService {
         text, // Caption
         messageId,
         filePath,
+        agentId,
         status: 'sent',
       },
+      include: {
+        agent: {
+          select: { id: true, name: true }
+        }
+      }
     });
     this.pusher.triggerNewMessage(saved);
     return saved;
