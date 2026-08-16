@@ -104,9 +104,9 @@ const fields = computed<CrudField[]>(() => {
     baseFields.splice(2, 0, {
       name: 'password',
       label: 'Password',
-      type: 'text',
+      type: 'password',
       required: true,
-      placeholder: '••••••••••••',
+      placeholder: 'Minimum 8 characters',
       description: 'Minimum 8 characters with at least one number.'
     });
   }

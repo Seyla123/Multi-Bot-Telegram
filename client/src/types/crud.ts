@@ -5,7 +5,7 @@ export interface CrudColumn {
   label: string;
   type: CrudColumnType;
   formatter?: (value: any, item: Record<string, any>) => string;
-  badgeStyle?: (value: any) => string; // e.g. custom Tailwind color classes for badges
+  badgeStyle?: (value: any) => string;
 }
 
 export interface CrudFieldOption {
@@ -13,7 +13,15 @@ export interface CrudFieldOption {
   value: string | number | boolean;
 }
 
-export type CrudFieldType = 'text' | 'email' | 'number' | 'select' | 'checkbox' | 'textarea';
+export type CrudFieldType =
+  | 'text'
+  | 'email'
+  | 'password'
+  | 'number'
+  | 'select'
+  | 'checkbox'
+  | 'textarea'
+  | 'date';
 
 export interface CrudField {
   name: string;
@@ -24,6 +32,8 @@ export interface CrudField {
   placeholder?: string;
   description?: string;
   defaultValue?: any;
+  /** If true, never pre-fill this field from existing record (e.g. passwords, tokens) */
+  sensitive?: boolean;
 }
 
 export interface ToastNotification {

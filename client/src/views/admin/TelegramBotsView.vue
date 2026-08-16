@@ -70,17 +70,14 @@ import CrudFormDrawer from '../../components/crud/CrudFormDrawer.vue';
 
 const columns: CrudColumn[] = [
   { name: 'name', label: 'Bot Name', type: 'text' },
+  { name: 'username', label: 'Username', type: 'text', formatter: (val) => val ? `@${val}` : '-' },
+  { name: 'botId', label: 'Telegram Bot ID', type: 'text' },
   { 
-    name: 'botToken', 
-    label: 'Bot Token', 
-    type: 'text',
-    formatter: (val) => val ? `${val.substring(0, 10)}••••••••` : '-'
-  },
-  { 
-    name: 'status', 
+    name: 'isActive', 
     label: 'Status', 
     type: 'badge',
-    badgeStyle: (val) => String(val).toUpperCase() === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'
+    badgeStyle: (val) => val === true || val === 'true' || val === 1 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200',
+    formatter: (val) => val ? 'Active' : 'Inactive'
   },
   { name: 'createdAt', label: 'Created', type: 'date' },
   { name: 'actions', label: '', type: 'actions' },
@@ -88,24 +85,22 @@ const columns: CrudColumn[] = [
 
 const fields: CrudField[] = [
   { name: 'name', label: 'Bot Display Name', type: 'text', required: true, placeholder: 'e.g. Support Notification Bot' },
+  { name: 'botId', label: 'Telegram Bot ID', type: 'text', required: true, placeholder: 'e.g. 7345007051', description: 'The numeric bot ID from Telegram.' },
   { 
     name: 'botToken', 
     label: 'Bot API Token', 
-    type: 'text', 
-    required: true, 
+    type: 'password',
+    sensitive: true,
+    required: false, 
     placeholder: '123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ',
-    description: 'Obtain this API token from @BotFather on Telegram.'
+    description: 'Obtain from @BotFather. Leave blank on edit to keep existing token.'
   },
+  { name: 'username', label: 'Username (optional)', type: 'text', placeholder: 'seyla_test_bot' },
   { 
-    name: 'status', 
-    label: 'Status', 
-    type: 'select', 
-    required: true,
-    defaultValue: 'ACTIVE',
-    options: [
-      { label: 'Active', value: 'ACTIVE' },
-      { label: 'Inactive / Paused', value: 'INACTIVE' }
-    ]
+    name: 'isActive', 
+    label: 'Active Bot', 
+    type: 'checkbox',
+    defaultValue: true
   }
 ];
 
