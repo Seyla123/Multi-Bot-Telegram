@@ -9,38 +9,39 @@ services:
       - "3000:3000"
     env_file:
       - .env
-    # To enable hot-reloading in local dev, uncomment command and volume below:
+    # Optional for local dev hot-reloading:
     # command: npm run start:dev
     # volumes:
     #   - .:/usr/src/app
     #   - /usr/src/app/node_modules
     depends_on:
+      mysql:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
       - nest_network
 
-  # Local MySQL Service (Uncomment if running MySQL locally instead of separate server)
-  # mysql:
-  #   image: mysql:8.0
-  #   container_name: nest_mysql
-  #   restart: always
-  #   ports:
-  #     - "3306:3306"
-  #   environment:
-  #     MYSQL_DATABASE: nest_db
-  #     MYSQL_ROOT_PASSWORD: root
-  #     MYSQL_USER: nest_user
-  #     MYSQL_PASSWORD: secretpassword
-  #   volumes:
-  #     - mysql_data:/var/lib/mysql
-  #   healthcheck:
-  #     test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #   networks:
-  #     - nest_network
+  mysql:
+    image: mysql:8.0
+    container_name: nest_mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: nest_db
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: nest_user
+      MYSQL_PASSWORD: secretpassword
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nest_network
 
   redis:
     image: redis:7-alpine
@@ -59,7 +60,7 @@ services:
       - nest_network
 
 volumes:
-  # mysql_data:
+  mysql_data:
   redis_data:
 
 networks:
