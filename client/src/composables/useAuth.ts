@@ -29,8 +29,6 @@ function clearSession() {
   currentAgent.value = null;
   localStorage.removeItem('auth_token');
   localStorage.removeItem('agent_info');
-  // Full reload to clear all state
-  window.location.reload();
 }
 
 function restoreSession() {
