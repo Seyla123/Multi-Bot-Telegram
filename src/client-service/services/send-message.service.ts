@@ -30,11 +30,10 @@ export class SendMessageService implements ClientServiceHandler {
     const chat = await this.prisma.telegramUser.findUnique({
       where: { telegramId_botId: { telegramId: input.chat_id, botId: bot.id } },
     });
-    if (!chat) throw new NotFoundException('Chat not found for this bot');
 
     const sent = await this.botManager.sendTextMessage(bot.id, input.chat_id, input.text);
     const message = await this.messages.saveOutgoingMessage(
-      chat.id,
+      chat?.id,
       input.text,
       sent.message_id.toString(),
       context.token.user?.id,
