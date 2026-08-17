@@ -18,15 +18,22 @@ if [ ! -f .env ]; then
 fi
 
 # 2. Pull latest code from Git
-echo -e "${BLUE}1/3 Pulling latest code from Git...${NC}"
+echo -e "${BLUE}1/4 Pulling latest code from Git...${NC}"
 git pull origin main
 
-# 3. Start containers safely
-echo -e "${BLUE}2/3 Starting Docker containers...${NC}"
+# 3. Auto-update Nginx reverse proxy configuration if Nginx exists on server
+if [ -d /etc/nginx/sites-available ]; then
+  echo -e "${BLUE}2/4 Syncing Nginx configuration...${NC}"
+  cp nginx/default.conf /etc/nginx/sites-available/default
+  nginx -t && systemctl reload nginx || true
+fi
+
+# 4. Start containers safely
+echo -e "${BLUE}3/4 Starting Docker containers...${NC}"
 docker compose up -d
 
-# 4. Apply pending database migrations safely (preserves existing data)
-echo -e "${BLUE}3/3 Applying database migrations...${NC}"
+# 5. Apply pending database migrations safely
+echo -e "${BLUE}4/4 Applying database migrations...${NC}"
 docker compose run --rm api npx prisma migrate deploy
 
 echo ""
