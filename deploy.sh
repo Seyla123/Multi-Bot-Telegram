@@ -3,79 +3,33 @@
 # Exit on error
 set -e
 
-# Color output helpers
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-# Default flag values
-BUILD=false
-MIGRATE=false
-SEED=false
-CLEAR_QUEUE=false
+echo -e "${BLUE}=== Deploying Application ===${NC}"
 
-# Parse command line flags
-for arg in "$@"
-do
-    case $arg in
-        --build)
-        BUILD=true
-        ;;
-        --migrate)
-        MIGRATE=true
-        ;;
-        --seed)
-        SEED=true
-        ;;
-        --clear-queue)
-        CLEAR_QUEUE=true
-        ;;
-        --all)
-        BUILD=true
-        MIGRATE=true
-        CLEAR_QUEUE=true
-        ;;
-        --help)
-        echo "Usage: ./deploy.sh [OPTIONS]"
-        echo "Options:"
-        echo "  (no flags)     Pull git code and restart container (Fast update)"
-        echo "  --build        Rebuild Docker images and restart containers"
-        echo "  --migrate      Run Prisma DB migrations"
-        echo "  --seed         Seed database data"
-        echo "  --clear-queue  Flush Redis queue & cache"
-        echo "  --all          Run build, migrate, and clear queue"
-        exit 0
-        ;;
-    esac
-done
+# 1. Ensure .env exists
+if [ ! -f .env ]; then
+  echo -e "${YELLOW}Creating .env file from .env.example...${NC}"
+  cp .env.example .env
+fi
 
-echo -e "${BLUE}=== 1. Pulling Latest Code from Git ===${NC}"
+# 2. Pull latest code from Git
+echo -e "${BLUE}1/3 Pulling latest code from Git...${NC}"
 git pull origin main
 
-if [ "$MIGRATE" = true ]; then
-  echo -e "${BLUE}=== 2. Running Database Migrations ===${NC}"
-  docker compose run --rm api npx prisma migrate deploy
-fi
+# 3. Start containers safely
+echo -e "${BLUE}2/3 Starting Docker containers...${NC}"
+docker compose up -d
 
-if [ "$SEED" = true ]; then
-  echo -e "${BLUE}=== 3. Seeding Database ===${NC}"
-  docker compose run --rm api npx prisma db seed
-fi
+# 4. Apply pending database migrations safely (preserves existing data)
+echo -e "${BLUE}3/3 Applying database migrations...${NC}"
+docker compose run --rm api npx prisma migrate deploy
 
-if [ "$BUILD" = true ]; then
-  echo -e "${BLUE}=== 4. Rebuilding Docker Images & Containers ===${NC}"
-  docker compose up -d --build
-else
-  echo -e "${BLUE}=== 4. Quick Restart API Container ===${NC}"
-  docker compose restart api
-fi
-
-if [ "$CLEAR_QUEUE" = true ]; then
-  echo -e "${BLUE}=== 5. Flushing Redis Queue & Cache ===${NC}"
-  docker exec nest_redis redis-cli FLUSHALL
-  echo -e "${GREEN}Redis queue flushed.${NC}"
-fi
-
-echo -e "${GREEN}=== Deployment Task Completed Successfully! ===${NC}"
+echo ""
+echo -e "${GREEN}======================================================${NC}"
+echo -e "${GREEN}   Application Deployed & Running Successfully!       ${NC}"
+echo -e "${GREEN}======================================================${NC}"
