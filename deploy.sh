@@ -54,22 +54,22 @@ done
 echo -e "${BLUE}=== 1. Pulling Latest Code from Git ===${NC}"
 git pull origin main
 
-if [ "$BUILD" = true ]; then
-  echo -e "${BLUE}=== 2. Rebuilding Docker Images & Containers ===${NC}"
-  docker compose up -d --build
-else
-  echo -e "${BLUE}=== 2. Quick Restart API Container (Skipping Rebuild) ===${NC}"
-  docker compose restart api
-fi
-
 if [ "$MIGRATE" = true ]; then
-  echo -e "${BLUE}=== 3. Running Database Migrations ===${NC}"
-  docker exec nest_api npx prisma migrate deploy
+  echo -e "${BLUE}=== 2. Running Database Migrations ===${NC}"
+  docker compose run --rm api npx prisma migrate deploy
 fi
 
 if [ "$SEED" = true ]; then
-  echo -e "${BLUE}=== 4. Seeding Database ===${NC}"
-  docker exec nest_api npx prisma db seed
+  echo -e "${BLUE}=== 3. Seeding Database ===${NC}"
+  docker compose run --rm api npx prisma db seed
+fi
+
+if [ "$BUILD" = true ]; then
+  echo -e "${BLUE}=== 4. Rebuilding Docker Images & Containers ===${NC}"
+  docker compose up -d --build
+else
+  echo -e "${BLUE}=== 4. Quick Restart API Container ===${NC}"
+  docker compose restart api
 fi
 
 if [ "$CLEAR_QUEUE" = true ]; then
