@@ -1,22 +1,22 @@
 FROM node:20
 
-# Create app directory
 WORKDIR /usr/src/app
 
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
+# 1. Copy backend package definition & Prisma schema
 COPY package*.json ./
-
-# Copy prisma schema so postinstall "prisma generate" can run successfully
 COPY prisma ./prisma/
 
-# Install app dependencies
+# 2. Install dependencies
 RUN npm install
 
-# Bundle app source
-COPY . .
+# 3. Build Vue 3 Frontend (client/dist)
+COPY client ./client
+RUN cd client && npm install && npm run build
 
-# Expose the port the app runs on
+# 4. Copy backend source code and build NestJS (dist/)
+COPY . .
+RUN npm run build
+
 EXPOSE 3000
 
-# We'll override this in docker-compose.yml for local development
 CMD [ "npm", "run", "start:prod" ]
