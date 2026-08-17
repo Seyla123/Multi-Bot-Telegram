@@ -1,5 +1,7 @@
 node_modules
-npm-debug.log
+client/node_modules
 dist
+client/dist
+npm-debug.log
 .git
 .env

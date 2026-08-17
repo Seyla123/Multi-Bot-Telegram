@@ -6,15 +6,16 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# 2. Install dependencies
+# 2. Install root dependencies
 RUN npm install
 
-# 3. Build Vue 3 Frontend (client/dist)
-COPY client ./client
+# 3. Copy all source files
+COPY . .
+
+# 4. Build Vue 3 Frontend (client/dist) AFTER copying source
 RUN cd client && npm install && npm run build
 
-# 4. Copy backend source code and build NestJS (dist/)
-COPY . .
+# 5. Build NestJS backend (dist/)
 RUN npm run build
 
 EXPOSE 3000
