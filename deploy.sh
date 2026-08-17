@@ -34,7 +34,7 @@ docker compose up -d
 
 # 5. Apply pending database migrations safely
 echo -e "${BLUE}4/4 Applying database migrations...${NC}"
-docker compose run --rm api npx prisma migrate deploy
+# docker compose run --rm api npx prisma migrate deploy
 
 echo ""
 echo -e "${GREEN}======================================================${NC}"
