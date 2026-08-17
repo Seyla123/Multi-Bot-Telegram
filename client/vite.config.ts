@@ -10,11 +10,14 @@ export default defineConfig({
   ],
   server: {
     proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
       '/admin': {
         target: 'http://localhost:3000',
         changeOrigin: true,
         bypass(req) {
-          // If browser is requesting an HTML document page, do not proxy — serve Vue SPA index.html
           if (req.headers.accept?.includes('text/html')) {
             return '/index.html';
           }

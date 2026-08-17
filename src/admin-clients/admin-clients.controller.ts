@@ -4,7 +4,7 @@ import { AdminGuard } from '../admin/guards/admin.guard';
 import { AdminClientsService } from './admin-clients.service';
 import { AdminClientQueryDto, CreateAdminClientDto, UpdateAdminClientDto } from './dto/admin-client.dto';
 
-@Controller('admin/clients')
+@Controller('api/admin/clients')
 @UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminClientsController {
   constructor(private readonly clients: AdminClientsService) {}

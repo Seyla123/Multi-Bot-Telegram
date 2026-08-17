@@ -20,7 +20,7 @@ import { CreateAgentDto, UpdateAgentDto } from './dto/admin-agent.dto';
 import { UpdateTelegramUserDto } from './dto/admin-user.dto';
 import { AdminCreateVideoDto, AdminUpdateVideoDto } from './dto/admin-video.dto';
 
-@Controller('admin')
+@Controller('api/admin')
 @UseGuards(JwtAuthGuard, AdminGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}

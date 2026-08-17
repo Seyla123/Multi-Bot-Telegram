@@ -11,9 +11,10 @@ services:
       - .env
     # Optional for local dev hot-reloading:
     # command: npm run start:dev
-    # volumes:
-    #   - .:/usr/src/app
-    #   - /usr/src/app/node_modules
+    volumes:
+      - ./dist:/usr/src/app/dist
+      - ./client/dist:/usr/src/app/client/dist
+      - ./storage:/usr/src/app/storage
     depends_on:
       mysql:
         condition: service_healthy

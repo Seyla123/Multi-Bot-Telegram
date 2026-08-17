@@ -29,7 +29,6 @@ import { AdminClientsModule } from './admin-clients/admin-clients.module';
           '/logs/{*any}',
           '/logs',
           '/auth/{*any}',
-          '/admin/{*any}',
         ],
       },
       {
@@ -39,7 +38,6 @@ import { AdminClientsModule } from './admin-clients/admin-clients.module';
           '/api/{*any}',
           '/telegram/{*any}',
           '/auth/{*any}',
-          '/admin/{*any}',
         ],
       },
     ),
