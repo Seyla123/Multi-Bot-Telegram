@@ -25,7 +25,8 @@ git pull origin main
 if [ -d /etc/nginx/sites-available ]; then
   echo -e "${BLUE}2/4 Syncing Nginx configuration...${NC}"
   cp nginx/default.conf /etc/nginx/sites-available/default
-  nginx -t && systemctl reload nginx || true
+  ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
+  nginx -t && systemctl restart nginx || true
 fi
 
 # 4. Start containers safely
