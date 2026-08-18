@@ -12,8 +12,8 @@ services:
     # Optional for local dev hot-reloading:
     # command: npm run start:dev
     volumes:
-      - ./dist:/usr/src/app/dist
-      - ./client/dist:/usr/src/app/client/dist
+      # - ./dist:/usr/src/app/dist
+      # - ./client/dist:/usr/src/app/client/dist
       - ./storage:/usr/src/app/storage
     depends_on:
       mysql:
