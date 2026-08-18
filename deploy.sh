@@ -8,7 +8,7 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo -e "${BLUE}=== Deploying Code Updates (Docker Build) ===${NC}"
+echo -e "${BLUE}=== Deploying Code Updates (Docker Build & Migrate) ===${NC}"
 
 # 1. Ensure .env exists
 if [ ! -f .env ]; then
@@ -17,19 +17,26 @@ if [ ! -f .env ]; then
 fi
 
 # 2. Pull latest code from Git
-echo -e "${BLUE}1/3 Pulling latest code from Git...${NC}"
+echo -e "${BLUE}1/4 Pulling latest code from Git...${NC}"
 git pull origin main
 
-# 3. Build and start containers
-# Using --build ensures the Docker image is built from the Dockerfile
-# where the build compilation actually happens (npm run build).
-# Since we commented out the host volumes, the container runs the pre-built files instantly.
-echo -e "${BLUE}2/3 Rebuilding and starting Docker containers...${NC}"
-docker compose up -d --build
+# 3. Rebuild the application image
+echo -e "${BLUE}2/4 Building new Docker images...${NC}"
+docker compose build api
 
-# 4. Sync Nginx configuration if present on host
+# 4. Run Database Migrations
+# This automatically spins up MySQL/Redis, waits for MySQL to be fully healthy,
+# and applies any pending Prisma migrations (creating/updating the database schema).
+echo -e "${BLUE}3/4 Deploying database migrations...${NC}"
+docker compose run --rm api npx prisma migrate deploy
+
+# 5. Start all containers in the background
+echo -e "${BLUE}4/4 Starting all services...${NC}"
+docker compose up -d
+
+# 6. Sync Nginx configuration if present on host
 if [ -d /etc/nginx/sites-available ]; then
-  echo -e "${BLUE}3/3 Syncing Nginx configuration...${NC}"
+  echo -e "${BLUE}Syncing Nginx configuration...${NC}"
   cp nginx/default.conf /etc/nginx/sites-available/default
   ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
   nginx -t && systemctl restart nginx || true
