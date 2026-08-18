@@ -16,6 +16,7 @@ import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
 import { ClientServiceModule } from './client-service/client-service.module';
 import { AdminClientsModule } from './admin-clients/admin-clients.module';
+import { ApiServicesModule } from './api-services/api-services.module';
 
 @Module({
   imports: [
@@ -58,6 +59,7 @@ import { AdminClientsModule } from './admin-clients/admin-clients.module';
     AdminModule,
     ClientServiceModule,
     AdminClientsModule,
+    ApiServicesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

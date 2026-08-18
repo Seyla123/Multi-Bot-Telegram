@@ -4,8 +4,10 @@ import {
   Injectable,
   NestInterceptor,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { SKIP_TRANSFORM_KEY } from '../decorators/skip-transform.decorator';
 
 export interface Response<T> {
   status: boolean;
@@ -18,11 +20,22 @@ export class TransformInterceptor<T> implements NestInterceptor<
   T,
   Response<T>
 > {
+  constructor(private readonly reflector: Reflector) {}
+
   intercept(
     context: ExecutionContext,
     next: CallHandler<T>,
   ): Observable<Response<T> | any> {
     if (context.getType() === ('telegraf' as any)) {
+      return next.handle();
+    }
+
+    // Allow individual handlers to opt out of the standard envelope
+    const skip = this.reflector.getAllAndOverride<boolean>(SKIP_TRANSFORM_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (skip) {
       return next.handle();
     }
 
@@ -43,3 +56,4 @@ export class TransformInterceptor<T> implements NestInterceptor<
     );
   }
 }
+
