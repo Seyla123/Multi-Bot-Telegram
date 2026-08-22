@@ -1,28 +1,4 @@
 services:
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: nest_api
-    restart: always
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    # Optional for local dev hot-reloading:
-    # command: npm run start:dev
-    volumes:
-      # - ./dist:/usr/src/app/dist
-      # - ./client/dist:/usr/src/app/client/dist
-      - ./storage:/usr/src/app/storage
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - nest_network
-
   mysql:
     image: mysql:8.0
     container_name: nest_mysql
@@ -41,8 +17,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - nest_network
 
   redis:
     image: redis:7-alpine
@@ -57,13 +31,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
-      - nest_network
 
 volumes:
   mysql_data:
   redis_data:
-
-networks:
-  nest_network:
-    driver: bridge

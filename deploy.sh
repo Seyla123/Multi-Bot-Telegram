@@ -8,7 +8,7 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo -e "${BLUE}=== Deploying Code Updates (Docker Build & Migrate) ===${NC}"
+echo -e "${BLUE}=== Deploying NestJS Backend Updates (Node.js & PM2) ===${NC}"
 
 # 1. Ensure .env exists
 if [ ! -f .env ]; then
@@ -17,32 +17,30 @@ if [ ! -f .env ]; then
 fi
 
 # 2. Pull latest code from Git
-echo -e "${BLUE}1/4 Pulling latest code from Git...${NC}"
+echo -e "${BLUE}1/5 Pulling latest code from Git...${NC}"
 git pull origin main
 
-# 3. Rebuild the application image
-echo -e "${BLUE}2/4 Building new Docker images...${NC}"
-docker compose build api
+# 3. Install dependencies & generate Prisma client
+echo -e "${BLUE}2/5 Installing dependencies & generating Prisma Client...${NC}"
+npm install
 
 # 4. Run Database Migrations
-# This automatically spins up MySQL/Redis, waits for MySQL to be fully healthy,
-# and applies any pending Prisma migrations (creating/updating the database schema).
-echo -e "${BLUE}3/4 Deploying database migrations...${NC}"
-docker compose run --rm api npx prisma migrate deploy
+echo -e "${BLUE}3/5 Deploying database migrations...${NC}"
+npx prisma migrate deploy
 
-# 5. Start all containers in the background
-echo -e "${BLUE}4/4 Starting all services...${NC}"
-docker compose up -d
+# 5. Build NestJS application
+echo -e "${BLUE}4/5 Building NestJS application...${NC}"
+npm run build
 
-# 6. Sync Nginx configuration if present on host
-if [ -d /etc/nginx/sites-available ]; then
-  echo -e "${BLUE}Syncing Nginx configuration...${NC}"
-  cp nginx/default.conf /etc/nginx/sites-available/default
-  ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
-  nginx -t && systemctl restart nginx || true
+# 6. Restart PM2 process
+echo -e "${BLUE}5/5 Restarting PM2 process...${NC}"
+if command -v pm2 &> /dev/null; then
+  pm2 reload nest_api || pm2 start dist/main.js --name "nest_api"
+else
+  echo -e "${YELLOW}PM2 not found. You can start the app with: npm run start:prod${NC}"
 fi
 
 echo ""
 echo -e "${GREEN}======================================================${NC}"
-echo -e "${GREEN}   New Code Built & Deployed Via Docker!              ${NC}"
+echo -e "${GREEN}   NestJS Backend Built & Deployed Successfully!      ${NC}"
 echo -e "${GREEN}======================================================${NC}"

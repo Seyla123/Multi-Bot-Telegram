@@ -20,28 +20,11 @@ import { ApiServicesModule } from './api-services/api-services.module';
 
 @Module({
   imports: [
-    ServeStaticModule.forRoot(
-      {
-        rootPath: join(process.cwd(), 'client/dist'),
-        exclude: [
-          '/api/{*any}',
-          '/telegram/{*any}',
-          '/storage/{*any}',
-          '/logs/{*any}',
-          '/logs',
-          '/auth/{*any}',
-        ],
-      },
-      {
-        rootPath: join(process.cwd(), 'storage'),
-        serveRoot: '/storage',
-        exclude: [
-          '/api/{*any}',
-          '/telegram/{*any}',
-          '/auth/{*any}',
-        ],
-      },
-    ),
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'storage'),
+      serveRoot: '/storage',
+      exclude: ['/api/{*any}', '/telegram/{*any}', '/auth/{*any}'],
+    }),
     ConfigModule.forRoot({ isGlobal: true }),
     BullModule.forRoot({
       connection: {

@@ -1,118 +1,100 @@
-# NestJS Telegram Multi-Bot Dashboard
+# NestJS Telegram Multi-Bot Backend API
 
-A comprehensive, production-ready platform for managing multiple Telegram bots from a single, unified web dashboard. Built with a powerful **NestJS** backend and a reactive **Vue 3** frontend, this system allows you to manage users, send text and media messages, process background jobs, and monitor system health all in one place.
+A production-ready **NestJS Backend API** for managing multiple Telegram bots, real-time customer support chat, background worker queues, and API Gateway capabilities for external integrations.
 
 ---
 
 ## 🚀 Key Features
 
-* **Multi-Bot Management:** Add and manage multiple Telegram bots simultaneously using their bot tokens. Webhooks are automatically configured.
-* **Unified Chat Interface:** A beautiful Vue 3 frontend dashboard to interact with users across all your bots. Send text, images, videos, and documents seamlessly.
-* **Real-time Updates:** Powered by **Pusher**, incoming Telegram messages instantly appear in the web dashboard without needing to refresh.
-* **Database & ORM:** Built on **MySQL** and **Prisma ORM** for type-safe, robust data modeling (Users, Bots, Messages, etc.).
-* **Background Processing:** Integrated with **BullMQ** and Redis to handle heavy tasks (like video processing and email queuing) asynchronously without blocking the main event loop.
-* **Built-in Log Viewer:** Uses **Winston** for daily rotating file logs, which are accessible directly through a beautiful custom UI built into the dashboard.
+- **Multi-Bot Management:** Register, manage, and configure webhooks dynamically for multiple Telegram bots.
+- **API Gateway & Microservices:** Dedicated endpoints (`/client/service` and `/api/services`) with Bearer token authentication, permissions, IP allowlisting, rate-limiting, daily quotas, and audit logging.
+- **Real-time WebSockets:** Integrated with **Pusher** for instantaneous message broadcasting.
+- **Background Queue Processing:** Uses **BullMQ** and Redis for asynchronous background tasks (video processing, email queues).
+- **Database & ORM:** Powered by **MySQL** and **Prisma ORM** for fully typed models.
+- **Daily Rotating Logs:** Built-in Winston logging with log streaming endpoints for dashboard log viewers.
+
+---
 
 ## 🛠️ Technology Stack
 
-### Backend
-- **NestJS** (Node.js Framework)
-- **Prisma** (Next-generation ORM)
-- **MySQL** (Relational Database)
-- **BullMQ & Redis** (Background Jobs & Message Queues)
-- **Telegraf** (Telegram Bot API Wrapper)
-- **Winston** (Advanced Logging)
-
-### Frontend
-- **Vue 3** (Composition API)
-- **Vite** (Next Generation Frontend Tooling)
-- **TailwindCSS** (Utility-first CSS framework)
+- **Framework:** NestJS 11 (Express platform)
+- **Database ORM:** Prisma ORM & MySQL
+- **Queues:** BullMQ & Redis
+- **Telegram Wrapper:** Telegraf
+- **WebSockets:** Pusher Server SDK
+- **Logging:** Winston & winston-daily-rotate-file
 
 ---
 
 ## 📦 Getting Started
 
 ### Prerequisites
-Make sure you have the following installed on your system:
-- **Node.js** (v18 or higher)
-- **Docker** and **Docker Compose** (for easy database and redis setup)
-- A Telegram account (to create bots via [@BotFather](https://t.me/botfather))
 
-### Installation
+- **Node.js** (v18+ or v20+)
+- **MySQL** (v8.0+) running locally or on a remote host
+- **Redis** (v7+) running locally or on a remote host
+- A Telegram account and Bot Token from [@BotFather](https://t.me/botfather)
+
+### Installation & Local Setup
 
 1. **Clone the repository:**
+
    ```bash
-   git clone https://github.com/yourusername/nest-telegram-dashboard.git
-   cd nest-telegram-dashboard
+   git clone https://github.com/yourusername/nest-learn.git
+   cd nest-learn
    ```
 
-2. **Environment Configuration:**
-   Copy the `.env.example` file to `.env` and fill in your details:
+2. **Configure Environment:**
+   Copy the sample `.env.example` to `.env` and set your database, Redis, and Telegram credentials:
+
    ```bash
    cp .env.example .env
    ```
-   *Make sure to set `TELEGRAM_WEBHOOK_DOMAIN` to your public URL (e.g., ngrok URL for local development) so Telegram can send updates to your backend.*
 
-3. **Start the Infrastructure (Database & Redis):**
-   ```bash
-   docker-compose up -d
-   ```
+3. **Install Dependencies:**
 
-4. **Install Dependencies:**
    ```bash
-   # Install backend dependencies
    npm install
-
-   # Install frontend dependencies
-   cd client && npm install && cd ..
    ```
 
-5. **Run Database Migrations:**
+4. **Run Database Migrations & Prisma Generation:**
+
    ```bash
    npx prisma db push
    npx prisma generate
    ```
 
-6. **Build the Frontend:**
-   ```bash
-   cd client && npm run build && cd ..
-   ```
-
-7. **Start the Application:**
+5. **Start Development Server:**
    ```bash
    npm run start:dev
    ```
-
----
-
-## 💻 Usage
-
-1. Open your browser and navigate to `http://localhost:3000`.
-2. Click on the **"Add Bot"** button in the sidebar.
-3. Paste the Bot Token provided by Telegram's BotFather.
-4. The system will automatically register the bot, set up the webhook, and start listening for messages!
-5. When a user messages your bot on Telegram, they will appear in the dashboard where you can chat with them directly.
-6. Click **"System Logs"** at the bottom of the sidebar to view backend activity and errors in real-time.
+   The API will start at `http://localhost:3000`.
 
 ---
 
 ## 🏗️ Project Structure
 
 ```text
-├── client/                 # Vue 3 Frontend SPA
-│   ├── src/components/     # UI Components (ChatArea, Sidebar, LogsViewer)
-│   └── src/services/       # API integration
-├── prisma/                 # Database Schema & Migrations
+├── prisma/                 # Database Schema, Migrations & Seeds
 │   └── schema.prisma       # Prisma data models
-├── src/                    # NestJS Backend
-│   ├── telegram/           # Telegram core logic & webhook handlers
-│   ├── logs/               # Log serving endpoints
-│   ├── emails/             # Email services
-│   ├── videos/             # Video processing & BullMQ workers
-│   └── pusher/             # Websocket event broadcasting
-└── storage/                # Local file storage (Media & Logs)
+├── src/                    # NestJS Backend API
+│   ├── admin/              # Admin CRUD endpoints (bots, users, messages, agents)
+│   ├── admin-clients/      # Client API token management & audit logs
+│   ├── api-services/       # Secret-authenticated service dispatcher
+│   ├── auth/               # Passport JWT authentication
+│   ├── client-service/     # Modern API Gateway (Bearer tokens, Quotas, Rate limits)
+│   ├── common/             # Global interceptors, filters, and Winston logger
+│   ├── emails/             # BullMQ email queue & processor
+│   ├── logs/               # Rotating file logs endpoint
+│   ├── pusher/             # Real-time WebSocket broadcasting
+│   ├── telegram/           # Multi-bot management, webhook handlers & media handling
+│   └── videos/             # BullMQ video processing queue & worker
+├── storage/                # Media uploads and daily rotating log files
+└── deploy.sh               # Node.js / PM2 deployment script
 ```
+
+---
 
 ## 📝 License
 
-This project is licensed under the MIT License. Feel free to use it, modify it, and contribute!
+This project is licensed under the MIT License.
