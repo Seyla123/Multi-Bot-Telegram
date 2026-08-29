@@ -1,6 +1,6 @@
 import { ApiTokenEnvironment, ApiTokenStatus, ApiTokenType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsDate, IsEnum, IsOptional, IsString, MaxLength, Min, IsInt } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsDate, IsEnum, IsOptional, IsString, MaxLength, Min, IsInt, IsIn } from 'class-validator';
 
 export class AdminClientQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
@@ -9,6 +9,16 @@ export class AdminClientQueryDto {
   @IsOptional() @IsEnum(ApiTokenType) type?: ApiTokenType;
   @IsOptional() @IsEnum(ApiTokenStatus) status?: ApiTokenStatus;
   @IsOptional() @IsEnum(ApiTokenEnvironment) environment?: ApiTokenEnvironment;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['createdAt', 'updatedAt', 'name', 'environment', 'status', 'lastUsedAt'])
+  sortBy?: string = 'createdAt';
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['asc', 'desc'])
+  sortOrder?: 'asc' | 'desc' = 'desc';
 }
 
 export class CreateAdminClientDto {

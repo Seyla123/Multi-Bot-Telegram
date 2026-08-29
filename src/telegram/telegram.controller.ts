@@ -1,7 +1,19 @@
 import {
-  Controller, Get, Post, Body, Param, UseInterceptors, UploadedFile,
-  Query, Delete, ParseIntPipe, Headers, UseGuards, Req,
-  HttpException, HttpStatus,
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseInterceptors,
+  UploadedFile,
+  Query,
+  Delete,
+  ParseIntPipe,
+  Headers,
+  UseGuards,
+  Req,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
@@ -19,7 +31,7 @@ export class TelegramController {
     private readonly botManagerService: BotManagerService,
     private readonly telegramBotService: TelegramBotService,
     private readonly configService: ConfigService,
-  ) { }
+  ) {}
 
   // --- API Endpoints for Bots ---
 
@@ -33,17 +45,28 @@ export class TelegramController {
   async setWebhooks() {
     const domain = this.configService.get<string>('TELEGRAM_WEBHOOK_DOMAIN');
     if (!domain) {
-      return { success: false, message: 'TELEGRAM_WEBHOOK_DOMAIN not set in .env' };
+      return {
+        success: false,
+        message: 'TELEGRAM_WEBHOOK_DOMAIN not set in .env',
+      };
     }
-    const secretToken = this.configService.get<string>('TELEGRAM_WEBHOOK_SECRET');
+    const secretToken = this.configService.get<string>(
+      'TELEGRAM_WEBHOOK_SECRET',
+    );
 
     const bots = await this.telegramBotService.getAllBots();
 
     const promises = bots.map(async (bot) => {
-      if (!bot.isActive) return { name: bot.name, success: false, message: 'Bot inactive' };
+      if (!bot.isActive)
+        return { name: bot.name, success: false, message: 'Bot inactive' };
 
       const telegraf = this.botManagerService.getBot(bot.id);
-      if (!telegraf) return { name: bot.name, success: false, message: 'Bot instance not found' };
+      if (!telegraf)
+        return {
+          name: bot.name,
+          success: false,
+          message: 'Bot instance not found',
+        };
 
       const webhookUrl = `${domain}/telegram/webhook/${bot.id}`;
       try {
@@ -57,7 +80,11 @@ export class TelegramController {
     });
 
     const resultsSettled = await Promise.allSettled(promises);
-    const results = resultsSettled.map(r => r.status === 'fulfilled' ? r.value : { name: 'Unknown', success: false, message: 'Promise rejected' });
+    const results = resultsSettled.map((r) =>
+      r.status === 'fulfilled'
+        ? r.value
+        : { name: 'Unknown', success: false, message: 'Promise rejected' },
+    );
 
     return { success: true, data: results };
   }
@@ -69,7 +96,9 @@ export class TelegramController {
     @Body() update: any,
     @Headers('x-telegram-bot-api-secret-token') providedToken?: string,
   ) {
-    const secretToken = this.configService.get<string>('TELEGRAM_WEBHOOK_SECRET');
+    const secretToken = this.configService.get<string>(
+      'TELEGRAM_WEBHOOK_SECRET',
+    );
     if (secretToken && providedToken !== secretToken) {
       return { success: false, message: 'Unauthorized webhook request' };
     }
@@ -78,7 +107,9 @@ export class TelegramController {
   }
 
   @Post('bots')
-  async createBot(@Body() body: { name: string; botToken: string; username?: string }) {
+  async createBot(
+    @Body() body: { name: string; botToken: string; username?: string },
+  ) {
     try {
       const bot = await this.telegramBotService.createBot(body);
       await this.botManagerService.startBot(bot.id, bot.botToken);
@@ -88,6 +119,69 @@ export class TelegramController {
     }
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Post(['bots/:id/set-webhook', 'bots/:id/webhook'])
+  async setBotWebhook(@Param('id', ParseIntPipe) id: number) {
+    const domain =
+      this.configService.get<string>('TELEGRAM_WEBHOOK_DOMAIN') ||
+      this.configService.get<string>('TELEGRAM_WEBHOOK_BASE_URL');
+    if (!domain) {
+      throw new HttpException(
+        'TELEGRAM_WEBHOOK_DOMAIN not set in .env',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const secretToken = this.configService.get<string>(
+      'TELEGRAM_WEBHOOK_SECRET',
+    );
+
+    const bot = await this.telegramBotService.getBot(id);
+    if (!bot) {
+      throw new HttpException('Bot not found', HttpStatus.NOT_FOUND);
+    }
+    if (!bot.isActive) {
+      throw new HttpException('Bot is inactive', HttpStatus.BAD_REQUEST);
+    }
+
+    let telegraf = this.botManagerService.getBot(bot.id);
+    if (!telegraf) {
+      await this.botManagerService.startBot(bot.id, bot.botToken);
+      telegraf = this.botManagerService.getBot(bot.id);
+    }
+    if (!telegraf) {
+      throw new HttpException('Bot instance not found', HttpStatus.BAD_REQUEST);
+    }
+
+    const baseUrl = domain.trim().replace(/\/+$/, '');
+    const webhookUrl = `${baseUrl}/telegram/webhook/${bot.id}`;
+    const extra: any = {};
+    if (secretToken && secretToken.trim() !== '') {
+      extra.secret_token = secretToken.trim();
+    }
+
+    try {
+      const ok = await telegraf.telegram.setWebhook(webhookUrl, extra);
+      return {
+        success: true,
+        message: 'Webhook set successfully',
+        data: {
+          botId: bot.id,
+          botName: bot.name,
+          username: bot.username,
+          webhookUrl,
+          hasSecretToken: !!secretToken,
+          telegram: { ok: !!ok },
+        },
+      };
+    } catch (err: any) {
+      throw new HttpException(
+        `Failed to set webhook: ${err.message}`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Delete('bots/:id')
   async deleteBot(@Param('id', ParseIntPipe) id: number) {
     try {
@@ -110,12 +204,23 @@ export class TelegramController {
     @Query('search') search?: string,
     @Query('botId') botId?: string,
     @Query('filter') filter?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 50;
     const botIdNum = botId ? parseInt(botId, 10) : undefined;
     const agentId = req.user?.id;
-    return this.telegramUserService.getUsers(pageNum, limitNum, search, botIdNum, filter, agentId);
+    return this.telegramUserService.getUsers(
+      pageNum,
+      limitNum,
+      search,
+      botIdNum,
+      filter,
+      agentId,
+      sortBy,
+      sortOrder,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -157,12 +262,18 @@ export class TelegramController {
     try {
       const user = await this.telegramUserService.getUserById(userId);
       if (!user || !user.botId) {
-        return { success: false, message: 'User not found or not associated with any bot' };
+        return {
+          success: false,
+          message: 'User not found or not associated with any bot',
+        };
       }
 
       const bot = this.botManagerService.getBot(user.botId);
       if (!bot) {
-        return { success: false, message: 'Bot instance not found or not running' };
+        return {
+          success: false,
+          message: 'Bot instance not found or not running',
+        };
       }
 
       let sentMsg: any;
@@ -172,12 +283,16 @@ export class TelegramController {
       if (file) {
         const fs = await import('fs');
         const path = await import('path');
-        const storageDir = path.join(process.cwd(), 'storage', 'telegram_files');
+        const storageDir = path.join(
+          process.cwd(),
+          'storage',
+          'telegram_files',
+        );
         if (!fs.existsSync(storageDir)) {
           fs.mkdirSync(storageDir, { recursive: true });
         }
         const ext = path.extname(file.originalname);
-        const filename = `${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`;
+        const filename = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
         const localFilePath = path.join(storageDir, filename);
         fs.writeFileSync(localFilePath, file.buffer);
         filePath = `storage/telegram_files/${filename}`;
@@ -187,16 +302,27 @@ export class TelegramController {
 
         if (mimeType.startsWith('image/')) {
           messageType = 'photo';
-          sentMsg = await bot.telegram.sendPhoto(telegramId, source, { caption: text });
+          sentMsg = await bot.telegram.sendPhoto(telegramId, source, {
+            caption: text,
+          });
         } else if (mimeType.startsWith('video/')) {
           messageType = 'video';
-          sentMsg = await bot.telegram.sendVideo(telegramId, source, { caption: text });
-        } else if (mimeType.startsWith('audio/') || mimeType.includes('voice')) {
+          sentMsg = await bot.telegram.sendVideo(telegramId, source, {
+            caption: text,
+          });
+        } else if (
+          mimeType.startsWith('audio/') ||
+          mimeType.includes('voice')
+        ) {
           messageType = 'voice';
-          sentMsg = await bot.telegram.sendVoice(telegramId, source, { caption: text });
+          sentMsg = await bot.telegram.sendVoice(telegramId, source, {
+            caption: text,
+          });
         } else {
           messageType = 'document';
-          sentMsg = await bot.telegram.sendDocument(telegramId, source, { caption: text });
+          sentMsg = await bot.telegram.sendDocument(telegramId, source, {
+            caption: text,
+          });
         }
       } else {
         sentMsg = await bot.telegram.sendMessage(telegramId, text);
@@ -210,14 +336,14 @@ export class TelegramController {
           sentMsg.message_id.toString(),
           messageType,
           filePath!,
-          agentId
+          agentId,
         );
       } else {
         savedMsg = await this.telegramMessageService.saveOutgoingMessage(
           userId,
           text,
           sentMsg.message_id.toString(),
-          agentId
+          agentId,
         );
       }
 
@@ -245,11 +371,17 @@ export class TelegramController {
   @Post('users/:id/assign')
   async assignConversation(@Param('id') id: string, @Req() req: any) {
     try {
-      const data = await this.telegramUserService.assignConversation(id, req.user.id);
+      const data = await this.telegramUserService.assignConversation(
+        id,
+        req.user.id,
+      );
       return { success: true, data };
     } catch (error: any) {
       const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
-      throw new HttpException({ success: false, message: error.message }, status);
+      throw new HttpException(
+        { success: false, message: error.message },
+        status,
+      );
     }
   }
 
@@ -257,11 +389,17 @@ export class TelegramController {
   @Post('users/:id/unassign')
   async unassignConversation(@Param('id') id: string, @Req() req: any) {
     try {
-      const data = await this.telegramUserService.unassignConversation(id, req.user.id);
+      const data = await this.telegramUserService.unassignConversation(
+        id,
+        req.user.id,
+      );
       return { success: true, data };
     } catch (error: any) {
       const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
-      throw new HttpException({ success: false, message: error.message }, status);
+      throw new HttpException(
+        { success: false, message: error.message },
+        status,
+      );
     }
   }
 
@@ -269,11 +407,17 @@ export class TelegramController {
   @Post('users/:id/resolve')
   async resolveConversation(@Param('id') id: string, @Req() req: any) {
     try {
-      const data = await this.telegramUserService.resolveConversation(id, req.user.id);
+      const data = await this.telegramUserService.resolveConversation(
+        id,
+        req.user.id,
+      );
       return { success: true, data };
     } catch (error: any) {
       const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
-      throw new HttpException({ success: false, message: error.message }, status);
+      throw new HttpException(
+        { success: false, message: error.message },
+        status,
+      );
     }
   }
 
@@ -281,11 +425,17 @@ export class TelegramController {
   @Post('users/:id/reopen')
   async reopenConversation(@Param('id') id: string, @Req() req: any) {
     try {
-      const data = await this.telegramUserService.reopenConversation(id, req.user.id);
+      const data = await this.telegramUserService.reopenConversation(
+        id,
+        req.user.id,
+      );
       return { success: true, data };
     } catch (error: any) {
       const status = error.status || HttpStatus.INTERNAL_SERVER_ERROR;
-      throw new HttpException({ success: false, message: error.message }, status);
+      throw new HttpException(
+        { success: false, message: error.message },
+        status,
+      );
     }
   }
 }

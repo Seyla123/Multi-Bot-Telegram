@@ -15,6 +15,6 @@ import { TelegramBotService } from './telegram-bot.service';
     TelegramUserService,
     TelegramMessageService,
   ],
-  exports: [BotManagerService, TelegramMessageService],
+  exports: [BotManagerService, TelegramMessageService, TelegramBotService],
 })
 export class TelegramModule {}

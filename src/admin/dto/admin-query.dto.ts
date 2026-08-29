@@ -21,7 +21,40 @@ export class AdminQueryDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['createdAt', 'updatedAt', 'name', 'email', 'title', 'telegramId', 'id'])
+  @IsIn([
+    'createdAt',
+    'updatedAt',
+    'name',
+    'email',
+    'title',
+    'telegramId',
+    'id',
+    'role',
+    'username',
+    'botId',
+    'isActive',
+    'firstName',
+    'lastName',
+    'messageId',
+    'direction',
+    'messageType',
+    'status',
+    'telegramUserId',
+    'originalFileName',
+    'phoneNumber',
+    'conversationStatus',
+    'assignedAgentId',
+    'agentId',
+    'agent',
+    'bot',
+    'text',
+    'type',
+    'environment',
+    'lastUsedAt',
+    'expiresAt',
+    'rateLimitPerMin',
+    'dailyQuota',
+  ])
   sortBy?: string = 'createdAt';
 
   @IsOptional()

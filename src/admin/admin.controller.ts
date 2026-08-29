@@ -18,7 +18,10 @@ import { AdminQueryDto } from './dto/admin-query.dto';
 import { CreateBotDto, UpdateBotDto } from './dto/admin-bot.dto';
 import { CreateAgentDto, UpdateAgentDto } from './dto/admin-agent.dto';
 import { UpdateTelegramUserDto } from './dto/admin-user.dto';
-import { AdminCreateVideoDto, AdminUpdateVideoDto } from './dto/admin-video.dto';
+import {
+  AdminCreateVideoDto,
+  AdminUpdateVideoDto,
+} from './dto/admin-video.dto';
 
 @Controller('api/admin')
 @UseGuards(JwtAuthGuard, AdminGuard)
@@ -54,12 +57,41 @@ export class AdminController {
     return this.adminService.deleteBot(id);
   }
 
+  @Post([
+    'bots/:id/set-webhook',
+    'bot/:id/set-webhook',
+    'bots/:id/webhook',
+    'bot/:id/webhook',
+    'telegram-bots/:id/webhook',
+    'telegram-bots/:id/set-webhook',
+  ])
+  setBotWebhook(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.setBotWebhook(id);
+  }
+
+  @Get([
+    'bots/:id/webhook',
+    'bot/:id/webhook',
+    'telegram-bots/:id/webhook',
+    'bots/:id/webhook-info',
+    'bot/:id/webhook-info',
+  ])
+  getBotWebhookInfo(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.getBotWebhookInfo(id);
+  }
+
+  @Delete(['bots/:id/webhook', 'bot/:id/webhook', 'telegram-bots/:id/webhook'])
+  deleteBotWebhook(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.deleteBotWebhook(id);
+  }
+
   // ──────────────────────────────────────────────────────────────────────────
   // AGENTS ENDPOINTS
   // ──────────────────────────────────────────────────────────────────────────
 
   @Get(['agents', 'agent'])
   listAgents(@Query() query: AdminQueryDto) {
+    console.log('LIST AGENTS QUERY:', query);
     return this.adminService.listAgents(query);
   }
 
@@ -127,7 +159,10 @@ export class AdminController {
   }
 
   @Put('telegram-users/:id')
-  updateTelegramUser(@Param('id') id: string, @Body() dto: UpdateTelegramUserDto) {
+  updateTelegramUser(
+    @Param('id') id: string,
+    @Body() dto: UpdateTelegramUserDto,
+  ) {
     return this.adminService.updateTelegramUser(id, dto);
   }
 

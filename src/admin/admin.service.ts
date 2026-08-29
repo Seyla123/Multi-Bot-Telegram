@@ -1,18 +1,32 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  Logger,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
-import { AgentRole } from '@prisma/client';
+import { BotManagerService } from '../telegram/bot-manager.service';
+import { AgentRole, Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { AdminQueryDto } from './dto/admin-query.dto';
 import { CreateBotDto, UpdateBotDto } from './dto/admin-bot.dto';
 import { CreateAgentDto, UpdateAgentDto } from './dto/admin-agent.dto';
 import { UpdateTelegramUserDto } from './dto/admin-user.dto';
-import { AdminCreateVideoDto, AdminUpdateVideoDto } from './dto/admin-video.dto';
+import {
+  AdminCreateVideoDto,
+  AdminUpdateVideoDto,
+} from './dto/admin-video.dto';
 
 @Injectable()
 export class AdminService {
   private readonly logger = new Logger(AdminService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+    private readonly botManagerService: BotManagerService,
+  ) {}
 
   // ──────────────────────────────────────────────────────────────────────────
   // BOTS CRUD
@@ -35,6 +49,42 @@ export class AdminService {
       where.isActive = query.status === 'true' || query.status === '1';
     }
 
+    const sortOrder: Prisma.SortOrder =
+      query.sortOrder === 'asc' ? 'asc' : 'desc';
+    let orderBy: Prisma.TelegramBotOrderByWithRelationInput = {
+      createdAt: 'desc',
+    };
+
+    if (query.sortBy) {
+      switch (query.sortBy) {
+        case 'id':
+          orderBy = { id: sortOrder };
+          break;
+        case 'botId':
+          orderBy = { botId: sortOrder };
+          break;
+        case 'name':
+          orderBy = { name: sortOrder };
+          break;
+        case 'username':
+          orderBy = { username: sortOrder };
+          break;
+        case 'isActive':
+        case 'status':
+          orderBy = { isActive: sortOrder };
+          break;
+        case 'updatedAt':
+          orderBy = { updatedAt: sortOrder };
+          break;
+        case 'createdAt':
+          orderBy = { createdAt: sortOrder };
+          break;
+        default:
+          orderBy = { createdAt: 'desc' };
+          break;
+      }
+    }
+
     const [items, total] = await Promise.all([
       this.prisma.telegramBot.findMany({
         where,
@@ -47,7 +97,7 @@ export class AdminService {
           createdAt: true,
           updatedAt: true,
         },
-        orderBy: query.sortBy ? { [query.sortBy]: query.sortOrder || 'asc' } : { createdAt: 'desc' },
+        orderBy,
         skip,
         take: limit,
       }),
@@ -74,11 +124,19 @@ export class AdminService {
 
   async createBot(dto: CreateBotDto) {
     // Check uniqueness
-    const existingId = await this.prisma.telegramBot.findUnique({ where: { botId: dto.botId } });
-    if (existingId) throw new BadRequestException('Bot with this Telegram ID already registered');
+    const existingId = await this.prisma.telegramBot.findUnique({
+      where: { botId: dto.botId },
+    });
+    if (existingId)
+      throw new BadRequestException(
+        'Bot with this Telegram ID already registered',
+      );
 
-    const existingToken = await this.prisma.telegramBot.findUnique({ where: { botToken: dto.botToken } });
-    if (existingToken) throw new BadRequestException('Bot with this token already registered');
+    const existingToken = await this.prisma.telegramBot.findUnique({
+      where: { botToken: dto.botToken },
+    });
+    if (existingToken)
+      throw new BadRequestException('Bot with this token already registered');
 
     const bot = await this.prisma.telegramBot.create({
       data: {
@@ -90,6 +148,10 @@ export class AdminService {
       },
     });
 
+    if (bot.isActive) {
+      await this.botManagerService.startBot(bot.id, bot.botToken);
+    }
+
     const result = { ...bot };
     delete (result as any).botToken; // Security protection
     return result;
@@ -97,7 +159,7 @@ export class AdminService {
 
   async updateBot(id: number, dto: UpdateBotDto) {
     const bot = await this.prisma.telegramBot.findUnique({ where: { id } });
-    if (!bot) throw new BadRequestException('Bot not found');
+    if (!bot) throw new NotFoundException('Bot not found');
 
     const data: any = {
       name: dto.name,
@@ -106,7 +168,11 @@ export class AdminService {
     };
 
     // Only update token if a new valid token is supplied
-    if (dto.botToken && dto.botToken.trim() !== '' && dto.botToken !== '********') {
+    if (
+      dto.botToken &&
+      dto.botToken.trim() !== '' &&
+      dto.botToken !== '********'
+    ) {
       data.botToken = dto.botToken;
     }
 
@@ -114,6 +180,14 @@ export class AdminService {
       where: { id },
       data,
     });
+
+    // Update in-memory bot instance
+    if (updated.isActive === false) {
+      await this.botManagerService.stopBot(id);
+    } else {
+      await this.botManagerService.stopBot(id);
+      await this.botManagerService.startBot(id, updated.botToken);
+    }
 
     const result = { ...updated };
     delete (result as any).botToken; // Security protection
@@ -125,14 +199,206 @@ export class AdminService {
       where: { id },
       include: { users: { take: 1 } },
     });
-    if (!bot) throw new BadRequestException('Bot not found');
+    if (!bot) throw new NotFoundException('Bot not found');
 
     if (bot.users.length > 0) {
-      throw new BadRequestException(`Cannot delete bot: It has active associated Telegram users.`);
+      throw new BadRequestException(
+        `Cannot delete bot: It has active associated Telegram users.`,
+      );
     }
 
+    await this.botManagerService.stopBot(id);
     await this.prisma.telegramBot.delete({ where: { id } });
     return { success: true };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // TELEGRAM BOT WEBHOOK OPERATIONS
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async setBotWebhook(id: number) {
+    const bot = await this.prisma.telegramBot.findUnique({ where: { id } });
+    if (!bot) {
+      throw new NotFoundException(`Telegram bot #${id} not found`);
+    }
+
+    if (!bot.isActive) {
+      throw new BadRequestException(
+        `Cannot set webhook for inactive bot "${bot.name}". Please activate the bot first.`,
+      );
+    }
+
+    if (
+      !bot.botToken ||
+      bot.botToken.trim() === '' ||
+      bot.botToken === '********'
+    ) {
+      throw new BadRequestException(
+        `Bot "${bot.name}" does not have a valid token configured.`,
+      );
+    }
+
+    const domain =
+      this.configService.get<string>('TELEGRAM_WEBHOOK_DOMAIN') ||
+      this.configService.get<string>('TELEGRAM_WEBHOOK_BASE_URL') ||
+      this.configService.get<string>('APP_URL');
+
+    if (!domain || domain.trim() === '') {
+      throw new BadRequestException(
+        'TELEGRAM_WEBHOOK_DOMAIN is not configured in the server environment (.env)',
+      );
+    }
+
+    const baseUrl = domain.trim().replace(/\/+$/, '');
+    const webhookUrl = `${baseUrl}/telegram/webhook/${bot.id}`;
+    const secretToken = this.configService.get<string>(
+      'TELEGRAM_WEBHOOK_SECRET',
+    );
+
+    let telegraf = this.botManagerService.getBot(bot.id);
+    if (!telegraf) {
+      await this.botManagerService.startBot(bot.id, bot.botToken);
+      telegraf = this.botManagerService.getBot(bot.id);
+    }
+
+    if (!telegraf) {
+      throw new BadRequestException(
+        `Failed to initialize Telegram client instance for bot "${bot.name}"`,
+      );
+    }
+
+    const extra: any = {};
+    if (secretToken && secretToken.trim() !== '') {
+      extra.secret_token = secretToken.trim();
+    }
+
+    try {
+      const result = await telegraf.telegram.setWebhook(webhookUrl, extra);
+      this.logger.log(
+        `Admin set webhook for Telegram Bot #${bot.id} (name: "${bot.name}", username: "${bot.username || 'n/a'}") to url: ${webhookUrl}`,
+      );
+
+      return {
+        success: true,
+        message: 'Webhook set successfully',
+        data: {
+          botId: bot.id,
+          botName: bot.name,
+          username: bot.username,
+          webhookUrl,
+          hasSecretToken: !!secretToken,
+          telegram: {
+            ok: !!result,
+          },
+        },
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to set Telegram webhook for Bot #${bot.id} (name: "${bot.name}"): ${error.message}`,
+      );
+      throw new BadRequestException(
+        `Unable to set Telegram webhook: ${error.message || 'Telegram API error'}`,
+      );
+    }
+  }
+
+  async getBotWebhookInfo(id: number) {
+    const bot = await this.prisma.telegramBot.findUnique({ where: { id } });
+    if (!bot) throw new NotFoundException(`Telegram bot #${id} not found`);
+
+    if (!bot.isActive) {
+      return {
+        success: true,
+        data: {
+          botId: bot.id,
+          botName: bot.name,
+          isActive: false,
+          webhookConfigured: false,
+          info: null,
+        },
+      };
+    }
+
+    let telegraf = this.botManagerService.getBot(bot.id);
+    if (!telegraf && bot.botToken) {
+      await this.botManagerService.startBot(bot.id, bot.botToken);
+      telegraf = this.botManagerService.getBot(bot.id);
+    }
+
+    if (!telegraf) {
+      return {
+        success: true,
+        data: {
+          botId: bot.id,
+          botName: bot.name,
+          isActive: true,
+          webhookConfigured: false,
+          info: null,
+        },
+      };
+    }
+
+    try {
+      const info = await telegraf.telegram.getWebhookInfo();
+      return {
+        success: true,
+        data: {
+          botId: bot.id,
+          botName: bot.name,
+          isActive: bot.isActive,
+          webhookConfigured: !!info?.url,
+          info,
+        },
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to get webhook info for Bot #${bot.id}: ${error.message}`,
+      );
+      throw new BadRequestException(
+        `Unable to fetch Telegram webhook info: ${error.message || 'Telegram API error'}`,
+      );
+    }
+  }
+
+  async deleteBotWebhook(id: number) {
+    const bot = await this.prisma.telegramBot.findUnique({ where: { id } });
+    if (!bot) throw new NotFoundException(`Telegram bot #${id} not found`);
+
+    let telegraf = this.botManagerService.getBot(bot.id);
+    if (!telegraf && bot.botToken) {
+      await this.botManagerService.startBot(bot.id, bot.botToken);
+      telegraf = this.botManagerService.getBot(bot.id);
+    }
+
+    if (!telegraf) {
+      throw new BadRequestException(
+        `Failed to initialize Telegram client instance for bot "${bot.name}"`,
+      );
+    }
+
+    try {
+      const result = await telegraf.telegram.deleteWebhook();
+      this.logger.log(
+        `Admin removed webhook for Telegram Bot #${bot.id} (name: "${bot.name}")`,
+      );
+      return {
+        success: true,
+        message: 'Webhook deleted successfully',
+        data: {
+          botId: bot.id,
+          telegram: {
+            ok: !!result,
+          },
+        },
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to delete webhook for Bot #${bot.id}: ${error.message}`,
+      );
+      throw new BadRequestException(
+        `Unable to delete Telegram webhook: ${error.message || 'Telegram API error'}`,
+      );
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -151,8 +417,42 @@ export class AdminService {
         { email: { contains: query.search } },
       ];
     }
-    if (query.status && (query.status === AgentRole.ADMIN || query.status === AgentRole.AGENT)) {
+    if (
+      query.status &&
+      (query.status === AgentRole.ADMIN || query.status === AgentRole.AGENT)
+    ) {
       where.role = query.status;
+    }
+
+    const sortOrder: Prisma.SortOrder =
+      query.sortOrder === 'asc' ? 'asc' : 'desc';
+    let orderBy: Prisma.AgentOrderByWithRelationInput = { createdAt: 'desc' };
+
+    if (query.sortBy) {
+      switch (query.sortBy) {
+        case 'id':
+          orderBy = { id: sortOrder };
+          break;
+        case 'name':
+          orderBy = { name: sortOrder };
+          break;
+        case 'email':
+          orderBy = { email: sortOrder };
+          break;
+        case 'role':
+        case 'status':
+          orderBy = { role: sortOrder };
+          break;
+        case 'updatedAt':
+          orderBy = { updatedAt: sortOrder };
+          break;
+        case 'createdAt':
+          orderBy = { createdAt: sortOrder };
+          break;
+        default:
+          orderBy = { createdAt: 'desc' };
+          break;
+      }
     }
 
     const [items, total] = await Promise.all([
@@ -166,7 +466,7 @@ export class AdminService {
           createdAt: true,
           updatedAt: true,
         },
-        orderBy: query.sortBy ? { [query.sortBy]: query.sortOrder || 'asc' } : { createdAt: 'desc' },
+        orderBy,
         skip,
         take: limit,
       }),
@@ -201,7 +501,9 @@ export class AdminService {
   }
 
   async createAgent(dto: CreateAgentDto) {
-    const existing = await this.prisma.agent.findUnique({ where: { email: dto.email } });
+    const existing = await this.prisma.agent.findUnique({
+      where: { email: dto.email },
+    });
     if (existing) throw new BadRequestException('Email already registered');
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
@@ -245,7 +547,9 @@ export class AdminService {
 
   async deleteAgent(id: string, currentAgentId: string) {
     if (id === currentAgentId) {
-      throw new BadRequestException('Self-deletion is not permitted. Please ask another administrator to remove this profile.');
+      throw new BadRequestException(
+        'Self-deletion is not permitted. Please ask another administrator to remove this profile.',
+      );
     }
 
     const agent = await this.prisma.agent.findUnique({
@@ -258,11 +562,15 @@ export class AdminService {
     if (!agent) throw new BadRequestException('Agent not found');
 
     if (agent.assignedConversations.length > 0) {
-      throw new BadRequestException(`Cannot delete agent: This operator has active assigned conversations.`);
+      throw new BadRequestException(
+        `Cannot delete agent: This operator has active assigned conversations.`,
+      );
     }
 
     if (agent.messages.length > 0) {
-      throw new BadRequestException(`Cannot delete agent: This operator has sent chat messages in the database. Deleting them would compromise audit trails.`);
+      throw new BadRequestException(
+        `Cannot delete agent: This operator has sent chat messages in the database. Deleting them would compromise audit trails.`,
+      );
     }
 
     await this.prisma.agent.delete({ where: { id } });
@@ -301,6 +609,67 @@ export class AdminService {
       where.conversationStatus = query.conversationStatus;
     }
 
+    const sortOrder: Prisma.SortOrder =
+      query.sortOrder === 'asc' ? 'asc' : 'desc';
+    let orderBy:
+      | Prisma.TelegramUserOrderByWithRelationInput
+      | Prisma.TelegramUserOrderByWithRelationInput[] = { createdAt: 'desc' };
+
+    if (query.sortBy) {
+      switch (query.sortBy) {
+        case 'id':
+          orderBy = { id: sortOrder };
+          break;
+        case 'telegramId':
+          orderBy = { telegramId: sortOrder };
+          break;
+        case 'botId':
+          orderBy = { botId: sortOrder };
+          break;
+        case 'bot':
+          orderBy = { bot: { name: sortOrder } };
+          break;
+        case 'firstName':
+          orderBy = { firstName: sortOrder };
+          break;
+        case 'lastName':
+          orderBy = { lastName: sortOrder };
+          break;
+        case 'name':
+          orderBy = [{ firstName: sortOrder }, { lastName: sortOrder }];
+          break;
+        case 'username':
+          orderBy = { username: sortOrder };
+          break;
+        case 'phoneNumber':
+          orderBy = { phoneNumber: sortOrder };
+          break;
+        case 'status':
+          orderBy = { status: sortOrder };
+          break;
+        case 'conversationStatus':
+          orderBy = { conversationStatus: sortOrder };
+          break;
+        case 'assignedAgentId':
+        case 'agentId':
+          orderBy = { assignedAgentId: sortOrder };
+          break;
+        case 'agent':
+        case 'assignedAgent':
+          orderBy = { assignedAgent: { name: sortOrder } };
+          break;
+        case 'updatedAt':
+          orderBy = { updatedAt: sortOrder };
+          break;
+        case 'createdAt':
+          orderBy = { createdAt: sortOrder };
+          break;
+        default:
+          orderBy = { createdAt: 'desc' };
+          break;
+      }
+    }
+
     const [items, total] = await Promise.all([
       this.prisma.telegramUser.findMany({
         where,
@@ -312,7 +681,7 @@ export class AdminService {
             select: { id: true, name: true, email: true },
           },
         },
-        orderBy: query.sortBy ? { [query.sortBy]: query.sortOrder || 'asc' } : { createdAt: 'desc' },
+        orderBy,
         skip,
         take: limit,
       }),
@@ -360,7 +729,10 @@ export class AdminService {
     };
 
     if (dto.assignedAgentId !== undefined) {
-      data.assignedAgentId = dto.assignedAgentId === 'null' || dto.assignedAgentId === '' ? null : dto.assignedAgentId;
+      data.assignedAgentId =
+        dto.assignedAgentId === 'null' || dto.assignedAgentId === ''
+          ? null
+          : dto.assignedAgentId;
     }
 
     const updated = await this.prisma.telegramUser.update({
@@ -389,7 +761,9 @@ export class AdminService {
     if (!user) throw new BadRequestException('Telegram user not found');
 
     if (user.messages.length > 0) {
-      throw new BadRequestException(`Cannot delete Telegram user: Active chat history (messages) exists for this user profile.`);
+      throw new BadRequestException(
+        `Cannot delete Telegram user: Active chat history (messages) exists for this user profile.`,
+      );
     }
 
     await this.prisma.telegramUser.delete({ where: { id } });
@@ -425,18 +799,82 @@ export class AdminService {
       where.agentId = query.agentId === 'null' ? null : query.agentId;
     }
 
+    const sortOrder: Prisma.SortOrder =
+      query.sortOrder === 'asc' ? 'asc' : 'desc';
+    let orderBy:
+      | Prisma.TelegramMessageOrderByWithRelationInput
+      | Prisma.TelegramMessageOrderByWithRelationInput[] = {
+      createdAt: 'desc',
+    };
+
+    if (query.sortBy) {
+      switch (query.sortBy) {
+        case 'id':
+          orderBy = { id: sortOrder };
+          break;
+        case 'messageId':
+          orderBy = { messageId: sortOrder };
+          break;
+        case 'messageType':
+          orderBy = { messageType: sortOrder };
+          break;
+        case 'text':
+          orderBy = { text: sortOrder };
+          break;
+        case 'status':
+          orderBy = { status: sortOrder };
+          break;
+        case 'telegramUserId':
+          orderBy = { telegramUserId: sortOrder };
+          break;
+        case 'agentId':
+        case 'agent':
+          orderBy = { agentId: sortOrder };
+          break;
+        case 'direction':
+          // In TelegramMessage: incoming messages have agentId == null, outgoing have agentId != null
+          orderBy = { agentId: sortOrder };
+          break;
+        case 'telegramUser':
+        case 'user':
+        case 'username':
+        case 'firstName':
+          orderBy = { telegramUser: { firstName: sortOrder } };
+          break;
+        case 'updatedAt':
+          orderBy = { updatedAt: sortOrder };
+          break;
+        case 'createdAt':
+          orderBy = { createdAt: sortOrder };
+          break;
+        default:
+          orderBy = { createdAt: 'desc' };
+          break;
+      }
+    }
+
     const [items, total] = await Promise.all([
       this.prisma.telegramMessage.findMany({
         where,
         include: {
           telegramUser: {
-            select: { id: true, firstName: true, lastName: true, username: true },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              username: true,
+              bot: {
+                select: {
+                  name: true,
+                },
+              },
+            },
           },
           agent: {
             select: { id: true, name: true, email: true },
           },
         },
-        orderBy: query.sortBy ? { [query.sortBy]: query.sortOrder || 'asc' } : { createdAt: 'desc' },
+        orderBy,
         skip,
         take: limit,
       }),
@@ -459,7 +897,17 @@ export class AdminService {
       where: { id },
       include: {
         telegramUser: {
-          select: { id: true, firstName: true, lastName: true, username: true },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            username: true,
+            bot: {
+              select: {
+                name: true,
+              },
+            },
+          },
         },
         agent: {
           select: { id: true, name: true, email: true },
@@ -471,7 +919,9 @@ export class AdminService {
   }
 
   async deleteTelegramMessage(id: string) {
-    throw new BadRequestException('Deleting chat history messages is prohibited for audit compliance.');
+    throw new BadRequestException(
+      'Deleting chat history messages is prohibited for audit compliance.',
+    );
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -494,10 +944,41 @@ export class AdminService {
       where.status = query.status;
     }
 
+    const sortOrder: Prisma.SortOrder =
+      query.sortOrder === 'asc' ? 'asc' : 'desc';
+    let orderBy: Prisma.VideoOrderByWithRelationInput = { createdAt: 'desc' };
+
+    if (query.sortBy) {
+      switch (query.sortBy) {
+        case 'id':
+          orderBy = { id: sortOrder };
+          break;
+        case 'title':
+        case 'name':
+          orderBy = { title: sortOrder };
+          break;
+        case 'originalFileName':
+          orderBy = { originalFileName: sortOrder };
+          break;
+        case 'status':
+          orderBy = { status: sortOrder };
+          break;
+        case 'updatedAt':
+          orderBy = { updatedAt: sortOrder };
+          break;
+        case 'createdAt':
+          orderBy = { createdAt: sortOrder };
+          break;
+        default:
+          orderBy = { createdAt: 'desc' };
+          break;
+      }
+    }
+
     const [items, total] = await Promise.all([
       this.prisma.video.findMany({
         where,
-        orderBy: query.sortBy ? { [query.sortBy]: query.sortOrder || 'asc' } : { createdAt: 'desc' },
+        orderBy,
         skip,
         take: limit,
       }),

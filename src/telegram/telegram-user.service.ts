@@ -1,4 +1,9 @@
-import { Injectable, ForbiddenException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PusherService } from '../pusher/pusher.service';
@@ -12,13 +17,13 @@ export class TelegramUserService {
 
   async upsertUser(from: any, botId: number) {
     if (!from || !from.id) return null;
-    
+
     return this.prisma.telegramUser.upsert({
-      where: { 
+      where: {
         telegramId_botId: {
           telegramId: from.id.toString(),
-          botId
-        }
+          botId,
+        },
       },
       update: {
         firstName: from.first_name,
@@ -36,7 +41,17 @@ export class TelegramUserService {
   }
 
   async getUserById(id: string) {
-    return this.prisma.telegramUser.findUnique({ where: { id } });
+    return this.prisma.telegramUser.findUnique({
+      where: { id },
+      include: {
+        bot: {
+          select: { id: true, name: true, username: true },
+        },
+        assignedAgent: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
   }
 
   async getUsers(
@@ -46,9 +61,11 @@ export class TelegramUserService {
     botId?: number,
     filter?: string,
     agentId?: string,
+    sortBy?: string,
+    sortOrder?: 'asc' | 'desc',
   ) {
     const skip = (page - 1) * limit;
-    
+
     const whereClause: Prisma.TelegramUserWhereInput = {};
 
     if (botId !== undefined && botId !== null) {
@@ -78,38 +95,101 @@ export class TelegramUserService {
         { firstName: { contains: search } },
         { lastName: { contains: search } },
         { username: { contains: search } },
-        { telegramId: { contains: search } }
+        { telegramId: { contains: search } },
       ];
+    }
+
+    const order: Prisma.SortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
+    let orderBy:
+      | Prisma.TelegramUserOrderByWithRelationInput
+      | Prisma.TelegramUserOrderByWithRelationInput[] = { updatedAt: 'desc' };
+
+    if (sortBy) {
+      switch (sortBy) {
+        case 'id':
+          orderBy = { id: order };
+          break;
+        case 'telegramId':
+          orderBy = { telegramId: order };
+          break;
+        case 'botId':
+          orderBy = { botId: order };
+          break;
+        case 'bot':
+          orderBy = { bot: { name: order } };
+          break;
+        case 'firstName':
+          orderBy = { firstName: order };
+          break;
+        case 'lastName':
+          orderBy = { lastName: order };
+          break;
+        case 'name':
+          orderBy = [{ firstName: order }, { lastName: order }];
+          break;
+        case 'username':
+          orderBy = { username: order };
+          break;
+        case 'phoneNumber':
+          orderBy = { phoneNumber: order };
+          break;
+        case 'status':
+          orderBy = { status: order };
+          break;
+        case 'conversationStatus':
+          orderBy = { conversationStatus: order };
+          break;
+        case 'assignedAgentId':
+        case 'agentId':
+          orderBy = { assignedAgentId: order };
+          break;
+        case 'agent':
+        case 'assignedAgent':
+          orderBy = { assignedAgent: { name: order } };
+          break;
+        case 'createdAt':
+          orderBy = { createdAt: order };
+          break;
+        case 'updatedAt':
+          orderBy = { updatedAt: order };
+          break;
+        default:
+          orderBy = { updatedAt: 'desc' };
+          break;
+      }
     }
 
     const [users, total] = await Promise.all([
       this.prisma.telegramUser.findMany({
         where: whereClause,
-        orderBy: { updatedAt: 'desc' },
+        orderBy,
         skip,
         take: limit,
         include: {
           assignedAgent: {
-            select: { id: true, name: true }
+            select: { id: true, name: true },
+          },
+          bot: {
+            select: { id: true, name: true, username: true },
           },
           _count: {
-            select: { messages: { where: { status: 'unread' } } }
+            select: { messages: { where: { status: 'unread' } } },
           },
           messages: {
             orderBy: { createdAt: 'desc' },
-            take: 1
-          }
-        }
+            take: 1,
+          },
+        },
       }),
-      this.prisma.telegramUser.count({ where: whereClause })
+      this.prisma.telegramUser.count({ where: whereClause }),
     ]);
 
-    const mappedUsers = users.map(user => {
+    const mappedUsers = users.map((user) => {
       const { _count, messages, ...rest } = user;
       return {
         ...rest,
         unreadCount: _count.messages,
-        lastMessage: messages[0] || null
+        lastMessage: messages[0] || null,
       };
     });
 
@@ -119,8 +199,8 @@ export class TelegramUserService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit)
-      }
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 
@@ -140,11 +220,13 @@ export class TelegramUserService {
       // Either user doesn't exist or already assigned
       const user = await this.prisma.telegramUser.findUnique({
         where: { id: userId },
-        include: { assignedAgent: { select: { id: true, name: true } } }
+        include: { assignedAgent: { select: { id: true, name: true } } },
       });
       if (!user) throw new NotFoundException('Conversation not found');
       if (user.assignedAgentId !== requestingAgentId) {
-        throw new ConflictException('This conversation is already assigned to another agent');
+        throw new ConflictException(
+          'This conversation is already assigned to another agent',
+        );
       }
       // If already assigned to same agent, return current state (idempotent)
       return this.buildConversationPayload(user);
@@ -152,7 +234,7 @@ export class TelegramUserService {
 
     const updatedUser = await this.prisma.telegramUser.findUnique({
       where: { id: userId },
-      include: { assignedAgent: { select: { id: true, name: true } } }
+      include: { assignedAgent: { select: { id: true, name: true } } },
     });
 
     const payload = this.buildConversationPayload(updatedUser!);
@@ -167,17 +249,19 @@ export class TelegramUserService {
   async unassignConversation(userId: string, requestingAgentId: string) {
     const user = await this.prisma.telegramUser.findUnique({
       where: { id: userId },
-      include: { assignedAgent: { select: { id: true, name: true } } }
+      include: { assignedAgent: { select: { id: true, name: true } } },
     });
     if (!user) throw new NotFoundException('Conversation not found');
     if (user.assignedAgentId !== requestingAgentId) {
-      throw new ForbiddenException('You can only unassign conversations assigned to you');
+      throw new ForbiddenException(
+        'You can only unassign conversations assigned to you',
+      );
     }
 
     const updatedUser = await this.prisma.telegramUser.update({
       where: { id: userId },
       data: { assignedAgentId: null },
-      include: { assignedAgent: { select: { id: true, name: true } } }
+      include: { assignedAgent: { select: { id: true, name: true } } },
     });
 
     const payload = this.buildConversationPayload(updatedUser);
@@ -191,17 +275,19 @@ export class TelegramUserService {
   async resolveConversation(userId: string, requestingAgentId: string) {
     const user = await this.prisma.telegramUser.findUnique({
       where: { id: userId },
-      include: { assignedAgent: { select: { id: true, name: true } } }
+      include: { assignedAgent: { select: { id: true, name: true } } },
     });
     if (!user) throw new NotFoundException('Conversation not found');
     if (user.assignedAgentId !== requestingAgentId) {
-      throw new ForbiddenException('You can only resolve conversations assigned to you');
+      throw new ForbiddenException(
+        'You can only resolve conversations assigned to you',
+      );
     }
 
     const updatedUser = await this.prisma.telegramUser.update({
       where: { id: userId },
       data: { conversationStatus: 'RESOLVED' },
-      include: { assignedAgent: { select: { id: true, name: true } } }
+      include: { assignedAgent: { select: { id: true, name: true } } },
     });
 
     const payload = this.buildConversationPayload(updatedUser);
@@ -215,17 +301,19 @@ export class TelegramUserService {
   async reopenConversation(userId: string, requestingAgentId: string) {
     const user = await this.prisma.telegramUser.findUnique({
       where: { id: userId },
-      include: { assignedAgent: { select: { id: true, name: true } } }
+      include: { assignedAgent: { select: { id: true, name: true } } },
     });
     if (!user) throw new NotFoundException('Conversation not found');
     if (user.assignedAgentId !== requestingAgentId) {
-      throw new ForbiddenException('You can only reopen conversations assigned to you');
+      throw new ForbiddenException(
+        'You can only reopen conversations assigned to you',
+      );
     }
 
     const updatedUser = await this.prisma.telegramUser.update({
       where: { id: userId },
       data: { conversationStatus: 'OPEN' },
-      include: { assignedAgent: { select: { id: true, name: true } } }
+      include: { assignedAgent: { select: { id: true, name: true } } },
     });
 
     const payload = this.buildConversationPayload(updatedUser);
