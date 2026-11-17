@@ -1,0 +1,46 @@
+
+name: Scheduled Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_time:
+        description: "Deployment time (Cambodia time, YYYY-MM-DD HH:mm)"
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Wait until deployment time
+        env:
+          DEPLOY_TIME: ${{ inputs.deploy_time }}
+        run: |
+          TARGET=$(date -d "$DEPLOY_TIME +0700" +%s)
+          NOW=$(date +%s)
+
+          if [ "$TARGET" -le "$NOW" ]; then
+            echo "Deployment time must be in the future"
+            exit 1
+          fi
+
+          while [ "$(date +%s)" -lt "$TARGET" ]; do
+            sleep 30
+          done
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge develop into main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin
+          git checkout main
+          git merge origin/develop --no-edit
+          git push origin main
